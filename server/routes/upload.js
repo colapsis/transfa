@@ -138,15 +138,20 @@ router.post('/', upload.single('file'), async (req, res) => {
   const uploadId = nanoid(6);
   const originalFilename = req.body.filename || req.headers['x-transfa-filename'] || req.file.originalname;
 
+  const passwordHash = req.body.password
+    ? crypto.createHash('sha256').update(String(req.body.password)).digest('hex')
+    : null;
+
   db.prepare(
-    `INSERT INTO uploads (id, api_key_id, filename, original_filename, size, sha256, mime_type, storage_path, expires_at, uploader_name, max_downloads)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO uploads (id, api_key_id, filename, original_filename, size, sha256, mime_type, storage_path, expires_at, uploader_name, max_downloads, password_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     uploadId, keyRow.id, req.file.filename, originalFilename,
     req.file.size, sha256, req.file.mimetype,
     req.file.path, expiresAt,
     keyRow.username || null,
-    req.body.max_downloads ? parseInt(req.body.max_downloads) : null
+    req.body.max_downloads ? parseInt(req.body.max_downloads) : null,
+    passwordHash
   );
 
   db.prepare('UPDATE api_keys SET uploads_today = uploads_today + 1, last_used_at = ? WHERE id = ?').run(now, keyRow.id);

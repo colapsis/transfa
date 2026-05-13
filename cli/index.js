@@ -10,7 +10,7 @@ const { createReadStream, statSync } = require('fs');
 
 const CONFIG_DIR = path.join(os.homedir(), '.transfa');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
-const DEFAULT_API = 'http://localhost:3001';
+const DEFAULT_API = 'https://transfa.sh';
 
 // ─── Config ───
 function loadConfig() {

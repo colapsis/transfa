@@ -1,0 +1,41 @@
+#!/bin/sh
+set -e
+
+BOLD="\033[1m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+RED="\033[31m"
+RESET="\033[0m"
+
+echo ""
+echo "  ${BOLD}transfa${RESET} — file sharing for agents"
+echo "  https://transfa.sh"
+echo ""
+
+# Check for node/npm
+if ! command -v npm >/dev/null 2>&1; then
+  echo "  ${RED}error:${RESET} npm not found."
+  echo "  Install Node.js 16+ first: https://nodejs.org"
+  echo ""
+  exit 1
+fi
+
+NODE_VER=$(node -e "process.stdout.write(process.versions.node)" 2>/dev/null || echo "0")
+NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
+if [ "$NODE_MAJOR" -lt 16 ] 2>/dev/null; then
+  echo "  ${YELLOW}warn:${RESET} Node.js 16+ required (you have $NODE_VER)"
+fi
+
+echo "  installing transfa CLI..."
+npm install -g transfa --quiet
+
+echo ""
+echo "  ${GREEN}✓${RESET} installed  $(transfa --version 2>/dev/null || tf --version 2>/dev/null || echo 'transfa')"
+echo ""
+echo "  next steps:"
+echo "    ${BOLD}tf --help${RESET}              see all commands"
+echo "    ${BOLD}tf auth set-key <key>${RESET}  connect your account"
+echo "    ${BOLD}tf upload <file>${RESET}       share a file"
+echo ""
+echo "  get a free key at: https://transfa.sh/dashboard"
+echo ""

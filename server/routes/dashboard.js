@@ -108,11 +108,11 @@ router.post('/keys', requireKey, (req, res) => {
   const name = req.body.name || 'new key';
   const newKey = generateKey();
 
-  db.prepare(
+  const result = db.prepare(
     'INSERT INTO api_keys (key, user_id, name, scope) VALUES (?, ?, ?, ?)'
   ).run(newKey, req.apiKey.user_id, name, 'read,write');
 
-  res.status(201).json({ key: newKey, name, scope: 'read,write' });
+  res.status(201).json({ id: result.lastInsertRowid, key: newKey, name, scope: 'read,write' });
 });
 
 module.exports = router;

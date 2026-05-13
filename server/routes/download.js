@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const db = require('../db');
 
 // GET /api/download/:id — actual file download
@@ -22,6 +23,17 @@ router.get('/:id', (req, res) => {
 
   if (upload.max_downloads !== null && upload.download_count >= upload.max_downloads) {
     return res.status(410).json({ error: 'download limit reached' });
+  }
+
+  if (upload.password_hash) {
+    const provided = req.query.password || req.headers['x-transfa-password'];
+    if (!provided) {
+      return res.status(401).json({ error: 'password required', code: 'PASSWORD_REQUIRED' });
+    }
+    const hash = crypto.createHash('sha256').update(String(provided)).digest('hex');
+    if (hash !== upload.password_hash) {
+      return res.status(403).json({ error: 'invalid password', code: 'INVALID_PASSWORD' });
+    }
   }
 
   if (!fs.existsSync(upload.storage_path)) {
@@ -48,6 +60,18 @@ router.get('/:id', (req, res) => {
   stream.pipe(res);
 });
 
+// GET /api/download/verify/:id?password=xxx — check password without downloading
+router.get('/verify/:id', (req, res) => {
+  const now = Math.floor(Date.now() / 1000);
+  const upload = db.prepare('SELECT * FROM uploads WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
+  if (!upload || upload.expires_at <= now) return res.status(404).json({ ok: false });
+  if (!upload.password_hash) return res.json({ ok: true });
+  const provided = req.query.password;
+  if (!provided) return res.status(401).json({ ok: false, code: 'PASSWORD_REQUIRED' });
+  const hash = crypto.createHash('sha256').update(String(provided)).digest('hex');
+  res.json({ ok: hash === upload.password_hash });
+});
+
 // GET /api/info/:id — file metadata (no download, no auth needed)
 router.get('/info/:id', (req, res) => {
   const now = Math.floor(Date.now() / 1000);
@@ -55,7 +79,7 @@ router.get('/info/:id', (req, res) => {
   const upload = db.prepare(
     `SELECT u.id, u.original_filename, u.size, u.sha256, u.mime_type,
             u.download_count, u.max_downloads, u.expires_at, u.created_at,
-            u.uploader_name, u.deleted_at
+            u.uploader_name, u.deleted_at, u.password_hash
      FROM uploads u WHERE u.id = ?`
   ).get(req.params.id);
 
@@ -77,6 +101,7 @@ router.get('/info/:id', (req, res) => {
     mime_type: upload.mime_type,
     download_count: upload.download_count,
     max_downloads: upload.max_downloads,
+    has_password: !!upload.password_hash,
     expires_at: new Date(upload.expires_at * 1000).toISOString(),
     created_at: new Date(upload.created_at * 1000).toISOString(),
     uploader_name: upload.uploader_name,

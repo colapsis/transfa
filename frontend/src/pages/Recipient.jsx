@@ -34,6 +34,9 @@ export default function Recipient() {
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [now, setNow] = useState(Date.now());
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState(null);
+  const [unlocked, setUnlocked] = useState(false);
 
   useEffect(() => {
     fetch(`${API_BASE}/info/${id}`)
@@ -63,10 +66,28 @@ export default function Recipient() {
     return () => clearInterval(t);
   }, [downloading]);
 
+  async function handleUnlock(e) {
+    e.preventDefault();
+    if (!password) return;
+    try {
+      const res = await fetch(`${API_BASE}/verify/${id}?password=${encodeURIComponent(password)}`);
+      const d = await res.json();
+      if (d.ok) {
+        setUnlocked(true);
+        setPasswordError(null);
+      } else {
+        setPasswordError('Incorrect password. Try again.');
+      }
+    } catch {
+      setPasswordError('Could not verify password — try again.');
+    }
+  }
+
   function handleDownload() {
     setDownloading(true);
     const a = document.createElement('a');
-    a.href = `${API_BASE}/${id}`;
+    const params = (info?.has_password && unlocked) ? `?password=${encodeURIComponent(password)}` : '';
+    a.href = `${API_BASE}/${id}${params}`;
     a.download = info?.filename || id;
     document.body.appendChild(a);
     a.click();
@@ -114,7 +135,8 @@ export default function Recipient() {
 
   const ext = getExt(info.filename);
   const sizeStr = formatBytes(info.bytes);
-  const curlCmd = `curl -L "${window.location.origin}${API_BASE}/${id}" -o "${info.filename}"`;
+  const dlParams = (info.has_password && unlocked) ? `?password=${encodeURIComponent(password)}` : '';
+  const curlCmd = `curl -L "${window.location.origin}${API_BASE}/${id}${dlParams}" -o "${info.filename}"`;
 
   return (
     <div className="recipient-shell">
@@ -170,7 +192,36 @@ export default function Recipient() {
             </div>
           </div>
 
-          {!downloading ? (
+          {info.has_password && !unlocked ? (
+            <form onSubmit={handleUnlock} style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ marginBottom: 8, fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-3)', letterSpacing: '0.06em' }}>
+                🔒 password protected
+              </div>
+              {passwordError && (
+                <div style={{ marginBottom: 8, padding: '8px 12px', background: 'rgba(255,92,92,0.08)', border: '1px solid rgba(255,92,92,0.3)', borderRadius: 6, fontSize: 13, color: 'var(--danger)', fontFamily: 'var(--mono)' }}>
+                  {passwordError}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Enter password…"
+                  autoFocus
+                  style={{ flex: 1, background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 14px', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 14, height: 56, outline: 'none' }}
+                />
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ height: 56, padding: '0 24px', fontSize: 15, fontWeight: 500 }}
+                  disabled={!password}
+                >
+                  Unlock
+                </button>
+              </div>
+            </form>
+          ) : !downloading ? (
             <button
               className="btn btn-primary btn-lg"
               onClick={handleDownload}

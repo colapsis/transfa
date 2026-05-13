@@ -426,11 +426,13 @@ function UploadsTab({ uploads, apiKey }) {
   );
 }
 
-function KeysTab({ apiKeys, apiKey, currentKey }) {
+function KeysTab({ apiKeys, apiKey, currentKey, onRefresh }) {
   const [copied, setCopied] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [newGeneratedKey, setNewGeneratedKey] = useState(null);
   const [newKeyCopied, setNewKeyCopied] = useState(false);
+  const [revoking, setRevoking] = useState(null);
+  const [keys, setKeys] = useState(apiKeys);
 
   function copy(text, id) {
     navigator.clipboard?.writeText(text);
@@ -447,11 +449,30 @@ function KeysTab({ apiKeys, apiKey, currentKey }) {
         body: JSON.stringify({ name: 'new key' }),
       });
       const d = await res.json();
-      if (d.key) setNewGeneratedKey(d.key);
+      if (d.key) {
+        setNewGeneratedKey(d.key);
+        setKeys(prev => [{ id: d.id, name: d.name, token_preview: d.key.slice(0, 12) + '•'.repeat(16) + d.key.slice(-4), scope: d.scope, uploads_today: 0, created_at: new Date().toISOString(), last_used_at: null, revoked: false }, ...prev]);
+      }
     } catch {
       // silently ignore
     }
     setGenerating(false);
+  }
+
+  async function revokeKey(keyId) {
+    setRevoking(keyId);
+    try {
+      const res = await fetch('/api/dashboard/keys/revoke', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key_id: keyId }),
+      });
+      const d = await res.json();
+      if (d.revoked) setKeys(prev => prev.filter(k => k.id !== keyId));
+    } catch {
+      // silently ignore
+    }
+    setRevoking(null);
   }
 
   function copyNewKey() {
@@ -501,9 +522,9 @@ function KeysTab({ apiKeys, apiKey, currentKey }) {
             <tr><th>Name</th><th>Token</th><th>Scope</th><th>Used today</th><th>Last used</th><th>Created</th><th /></tr>
           </thead>
           <tbody>
-            {apiKeys.length === 0 ? (
+            {keys.length === 0 ? (
               <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--mono)', fontSize: 12 }}>no additional keys</td></tr>
-            ) : apiKeys.map(k => (
+            ) : keys.map(k => (
               <tr key={k.id}>
                 <td style={{ fontWeight: 500 }}>{k.name}</td>
                 <td>
@@ -518,7 +539,16 @@ function KeysTab({ apiKeys, apiKey, currentKey }) {
                 <td className="mono">{k.uploads_today}</td>
                 <td className="mono muted">{timeAgo(k.last_used_at)}</td>
                 <td className="mono muted">{k.created_at ? new Date(k.created_at).toLocaleDateString() : '—'}</td>
-                <td><button className="btn btn-ghost btn-sm">revoke</button></td>
+                <td>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: 'var(--danger)', opacity: revoking === k.id ? 0.5 : 1 }}
+                    onClick={() => revokeKey(k.id)}
+                    disabled={revoking === k.id}
+                  >
+                    {revoking === k.id ? '…' : 'revoke'}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
