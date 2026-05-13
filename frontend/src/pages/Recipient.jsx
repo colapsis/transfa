@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { DownloadIcon } from '../components/Icons.jsx';
 import Wordmark from '../components/Wordmark.jsx';
+import Seo from '../components/Seo.jsx';
 
 const API_BASE = '/api/download';
 
@@ -117,6 +118,11 @@ export default function Recipient() {
 
   return (
     <div className="recipient-shell">
+      <Seo
+        title={info ? `Download ${info.filename}` : 'Download file'}
+        description={info ? `Download ${info.filename} (${formatBytes(info.bytes)}) via transfa.sh — shared file link.` : 'Download a file shared via transfa.sh.'}
+        noindex
+      />
       <div style={{ width: '100%', maxWidth: 540 }}>
         <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center', marginBottom: 18, letterSpacing: '0.04em' }}>
           <span style={{ color: 'var(--text-4)' }}>→</span> transfa.sh/<span style={{ color: 'var(--accent)' }}>{id}</span>

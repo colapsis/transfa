@@ -1,4 +1,5 @@
 import { Routes, Route, useLocation } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import TopNav from './components/TopNav.jsx';
 import Landing from './pages/Landing.jsx';
 import Docs from './pages/Docs.jsx';
@@ -11,7 +12,7 @@ export default function App() {
   const isRecipient = pathname.startsWith('/f/');
 
   return (
-    <>
+    <HelmetProvider>
       {!isRecipient && <TopNav />}
       <Routes>
         <Route path="/" element={<Landing />} />
@@ -20,6 +21,6 @@ export default function App() {
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/f/:id" element={<Recipient />} />
       </Routes>
-    </>
+    </HelmetProvider>
   );
 }

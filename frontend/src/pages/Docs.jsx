@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Footer from '../components/Footer.jsx';
 import CodeWindow, { Sh } from '../components/CodeWindow.jsx';
 import { SearchIcon } from '../components/Icons.jsx';
+import Seo from '../components/Seo.jsx';
 
 function Mono({ children }) {
   return <code style={{ fontFamily: 'var(--mono)', fontSize: 13, background: 'var(--bg-2)', padding: '2px 6px', borderRadius: 4, color: 'var(--accent)' }}>{children}</code>;
@@ -91,6 +92,11 @@ export default function Docs() {
 
   return (
     <div className="page">
+      <Seo
+        title="Docs & API Reference"
+        description="Full CLI reference, REST API docs, Python/Node/Go SDK, MCP server setup, rate limits, and authentication guide for transfa file sharing."
+        canonical="/docs"
+      />
       <div className="layout-sidebar">
         <aside className="sidebar">
           <div style={{ marginBottom: 32, padding: '0 10px' }}>

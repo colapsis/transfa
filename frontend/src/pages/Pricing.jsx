@@ -2,6 +2,23 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Footer from '../components/Footer.jsx';
 import { ArrowIcon } from '../components/Icons.jsx';
+import Seo from '../components/Seo.jsx';
+
+const PRICING_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: 'transfa.sh',
+  description: 'File sharing for AI agents and developers. Free, Pro, and Team plans.',
+  url: 'https://transfa.sh/pricing',
+  brand: { '@type': 'Brand', name: 'transfa.sh' },
+  offers: [
+    { '@type': 'Offer', name: 'Free Plan', price: '0', priceCurrency: 'USD', availability: 'https://schema.org/InStock', url: 'https://transfa.sh/dashboard' },
+    { '@type': 'Offer', name: 'Pro Plan — Monthly', price: '12', priceCurrency: 'USD', availability: 'https://schema.org/InStock', url: 'https://transfa.sh/dashboard' },
+    { '@type': 'Offer', name: 'Pro Plan — Annual', price: '10', priceCurrency: 'USD', availability: 'https://schema.org/InStock', url: 'https://transfa.sh/dashboard', description: 'Billed annually ($120/year)' },
+    { '@type': 'Offer', name: 'Team Plan — Monthly', price: '48', priceCurrency: 'USD', availability: 'https://schema.org/InStock', url: 'https://transfa.sh/dashboard' },
+    { '@type': 'Offer', name: 'Team Plan — Annual', price: '40', priceCurrency: 'USD', availability: 'https://schema.org/InStock', url: 'https://transfa.sh/dashboard', description: 'Billed annually ($480/year)' },
+  ],
+};
 
 export default function Pricing() {
   const [annual, setAnnual] = useState(false);
@@ -9,6 +26,13 @@ export default function Pricing() {
 
   return (
     <div className="page">
+      <Seo
+        title="Pricing"
+        description="Flat plans for individuals and teams. Free forever, Pro at $12/mo, Team at $48/mo. No seats, no egress surprises. 14-day trial on paid plans."
+        canonical="/pricing"
+        ogType="website"
+        jsonLd={PRICING_JSON_LD}
+      />
       <section style={{ padding: '96px 32px 64px', borderBottom: '1px solid var(--border)' }} className="grid-bg">
         <div className="container" style={{ textAlign: 'center' }}>
           <div className="eyebrow" style={{ justifyContent: 'center' }}>Pricing</div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import Seo from '../components/Seo.jsx';
 
 const API_KEY_STORAGE = 'transfa_api_key';
 
@@ -126,6 +127,7 @@ export default function Dashboard() {
   if (!apiKey) {
     return (
       <div style={{ minHeight: 'calc(100vh - 56px)', display: 'grid', placeItems: 'center', padding: 32 }}>
+        <Seo title="Sign In" noindex />
         <div style={{ width: '100%', maxWidth: 480 }}>
 
           {/* New key reveal — shown after generation */}
@@ -223,6 +225,7 @@ export default function Dashboard() {
 
   return (
     <div style={{ minHeight: 'calc(100vh - 56px)' }}>
+      <Seo title="Dashboard" noindex />
       <div className="dash-grid">
         <aside className="dash-side">
           <div className="user">

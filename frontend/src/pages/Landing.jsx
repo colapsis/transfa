@@ -3,10 +3,89 @@ import { Link } from 'react-router-dom';
 import Footer from '../components/Footer.jsx';
 import CodeWindow, { Sh } from '../components/CodeWindow.jsx';
 import { ArrowIcon, GhIcon } from '../components/Icons.jsx';
+import Seo from '../components/Seo.jsx';
+
+const LANDING_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': 'https://transfa.sh/#website',
+      url: 'https://transfa.sh',
+      name: 'transfa.sh',
+      description: 'File sharing for AI agents and developers',
+    },
+    {
+      '@type': 'Organization',
+      '@id': 'https://transfa.sh/#org',
+      name: 'Transfa Labs',
+      url: 'https://transfa.sh',
+      logo: { '@type': 'ImageObject', url: 'https://transfa.sh/og-image.png' },
+      sameAs: ['https://github.com/colapsis/transfa'],
+    },
+    {
+      '@type': 'SoftwareApplication',
+      '@id': 'https://transfa.sh/#app',
+      name: 'transfa',
+      alternateName: 'tf',
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'macOS, Linux, Windows',
+      url: 'https://transfa.sh',
+      description: 'Dead-simple file sharing CLI for AI agents and developers. One command, signed URL, 7-day expiry.',
+      downloadUrl: 'https://transfa.sh/install',
+      softwareVersion: '1.4.2',
+      isAccessibleForFree: true,
+      offers: [
+        { '@type': 'Offer', price: '0', priceCurrency: 'USD', name: 'Free Plan' },
+        { '@type': 'Offer', price: '12', priceCurrency: 'USD', name: 'Pro Plan', description: '$12/month billed monthly, $10/month billed annually' },
+        { '@type': 'Offer', price: '48', priceCurrency: 'USD', name: 'Team Plan', description: '$48/month billed monthly, $40/month billed annually' },
+      ],
+    },
+    {
+      '@type': 'FAQPage',
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: 'Is the agent the recipient or the sender?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Both. Most teams use transfa to let agents publish artifacts (build outputs, screenshots, dataset slices) for humans, and to let agents fetch large inputs that don\'t fit in a context window. The CLI works identically either direction.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'What happens after a link expires?',
+          acceptedAnswer: { '@type': 'Answer', text: 'The file is purged from object storage and the share record is sealed. The URL returns 410 Gone, not 404 — so your agent can distinguish "this never existed" from "this is past TTL" and react accordingly.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'How is this different from S3 presigned URLs?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Presigned URLs are a primitive. Transfa is the product: short URLs, automatic content-type detection, virus scanning, audit log, password gating, MCP server, idempotency, and a CLI that pipes. You can build it yourself; you probably shouldn\'t.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'Can I self-host transfa?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Yes. Team plan ships a Docker image and Helm chart. State lives in Postgres + S3-compatible storage (R2, B2, MinIO). No phone-home.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'Does transfa scan uploaded files for viruses?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Every upload runs through ClamAV before the link is published. Suspicious files are quarantined and the uploader is notified. We do not read file contents for any other purpose.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'Does transfa support end-to-end encryption?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Opt-in. tf --encrypt generates a passphrase, encrypts client-side with age, and embeds the key in the URL fragment. Our servers never see the plaintext or the key.' },
+        },
+      ],
+    },
+  ],
+};
 
 export default function Landing() {
   return (
     <div className="page">
+      <Seo
+        canonical="/"
+        jsonLd={LANDING_JSON_LD}
+      />
       <Hero />
       <Logos />
       <HowItWorks />

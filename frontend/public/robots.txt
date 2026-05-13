@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /f/
+
+Sitemap: https://transfa.sh/sitemap.xml
