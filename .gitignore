@@ -1,0 +1,12 @@
+node_modules/
+uploads/*
+!uploads/.gitkeep
+transfa.db
+*.db-shm
+*.db-wal
+.env
+.env.local
+frontend/dist/
+frontend/.vite/
+*.log
+.DS_Store

@@ -1,0 +1,22 @@
+{
+  "name": "transfa",
+  "version": "1.4.2",
+  "description": "WeTransfer for agents. Dead-simple file sharing CLI for AI agents and developers.",
+  "main": "index.js",
+  "bin": {
+    "transfa": "./index.js",
+    "tf": "./index.js"
+  },
+  "scripts": {
+    "test": "node index.js --help"
+  },
+  "keywords": ["file-sharing", "cli", "agents", "ai", "mcp"],
+  "author": "Transfa Labs",
+  "license": "MIT",
+  "dependencies": {
+    "form-data": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}
