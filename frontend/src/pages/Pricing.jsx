@@ -173,7 +173,17 @@ export default function Pricing() {
   );
 }
 
-function PriceCard({ name, price, sub, desc, featured, features, cta, ctaTo }) {
+function PriceCard({ name, price, sub, desc, featured, features, cta, ctaTo, onUpgrade }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick(e) {
+    if (name === 'free' || !onUpgrade) return;
+    e.preventDefault();
+    setLoading(true);
+    await onUpgrade(name);
+    setLoading(false);
+  }
+
   return (
     <div className={'price-card' + (featured ? ' featured' : '')} style={{ position: 'relative' }}>
       {featured && <div style={{ position: 'absolute', top: 16, right: 16 }}><span className="pill pill-accent">most picked</span></div>}
@@ -186,7 +196,14 @@ function PriceCard({ name, price, sub, desc, featured, features, cta, ctaTo }) {
         {features.map(f => <li key={f}><span className="check">▸</span>{f}</li>)}
       </ul>
       <div style={{ marginTop: 'auto' }}>
-        <Link className={'btn ' + (featured ? 'btn-primary' : 'btn-secondary')} style={{ width: '100%', justifyContent: 'center' }} to={ctaTo}>{cta}</Link>
+        <Link
+          className={'btn ' + (featured ? 'btn-primary' : 'btn-secondary')}
+          style={{ width: '100%', justifyContent: 'center', opacity: loading ? 0.7 : 1 }}
+          to={ctaTo}
+          onClick={handleClick}
+        >
+          {loading ? 'loading…' : cta}
+        </Link>
       </div>
     </div>
   );

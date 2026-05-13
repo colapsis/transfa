@@ -15,6 +15,11 @@ db.exec(`
     email TEXT UNIQUE,
     username TEXT UNIQUE NOT NULL,
     plan TEXT NOT NULL DEFAULT 'free',
+    stripe_customer_id TEXT UNIQUE,
+    stripe_subscription_id TEXT UNIQUE,
+    stripe_price_id TEXT,
+    subscription_status TEXT DEFAULT 'inactive',
+    subscription_period_end INTEGER,
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
   );
 

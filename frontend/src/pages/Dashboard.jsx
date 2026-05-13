@@ -58,10 +58,13 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  // Key reveal state after generation
-  const [newKeyInfo, setNewKeyInfo] = useState(null); // { key, username }
+  const [newKeyInfo, setNewKeyInfo] = useState(null);
   const [keyCopied, setKeyCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [upgradeBanner, setUpgradeBanner] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('upgrade') === 'success';
+  });
 
   useEffect(() => {
     if (!apiKey) return;
@@ -202,6 +205,16 @@ export default function Dashboard() {
   }
 
   const user = data?.user || { username: 'anonymous', plan: 'free' };
+
+  // Upgrade success banner (shown after returning from Stripe Checkout)
+  const UpgradeBanner = upgradeBanner ? (
+    <div style={{ margin: '0 0 24px', padding: '14px 20px', border: '1px solid var(--accent-line)', borderRadius: 8, background: 'var(--accent-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>
+        <span style={{ color: 'var(--accent)' }}>✓</span> <span style={{ color: 'var(--text)' }}>Upgrade successful.</span> <span style={{ color: 'var(--text-3)' }}>Your plan will update within a few seconds.</span>
+      </div>
+      <button onClick={() => { setUpgradeBanner(false); window.history.replaceState({}, '', '/dashboard'); }} style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 13 }}>✕</button>
+    </div>
+  ) : null;
   const stats = data?.stats || {};
   const uploads = data?.uploads || [];
   const apiKeys = data?.api_keys || [];
@@ -270,6 +283,7 @@ export default function Dashboard() {
         </aside>
 
         <main className="dash-main">
+          {UpgradeBanner}
           <div className="dash-h">
             <div>
               <div className="crumb">workspace / {user.username} / {tab}</div>
@@ -280,13 +294,6 @@ export default function Dashboard() {
                 <button className="btn btn-secondary btn-sm">Export CSV</button>
                 <button className="btn btn-primary btn-sm">+ New upload</button>
               </div>
-            )}
-            {tab === 'keys' && (
-              <button className="btn btn-primary btn-sm" onClick={async () => {
-                const res = await fetch('/api/dashboard/keys', { method: 'POST', headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'new key' }) });
-                const d = await res.json();
-                if (d.key) alert('New key: ' + d.key);
-              }}>+ Generate key</button>
             )}
           </div>
 
@@ -325,7 +332,7 @@ export default function Dashboard() {
 
           {tab === 'uploads' && <UploadsTab uploads={uploads} apiKey={apiKey} />}
           {tab === 'keys' && <KeysTab apiKeys={apiKeys} apiKey={apiKey} currentKey={apiKey} />}
-          {tab === 'billing' && <BillingTab plan={user.plan} />}
+          {tab === 'billing' && <BillingTab plan={user.plan} apiKey={apiKey} />}
           {tab === 'settings' && <SettingsTab user={user} />}
         </main>
       </div>
@@ -418,6 +425,9 @@ function UploadsTab({ uploads, apiKey }) {
 
 function KeysTab({ apiKeys, apiKey, currentKey }) {
   const [copied, setCopied] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [newGeneratedKey, setNewGeneratedKey] = useState(null);
+  const [newKeyCopied, setNewKeyCopied] = useState(false);
 
   function copy(text, id) {
     navigator.clipboard?.writeText(text);
@@ -425,11 +435,62 @@ function KeysTab({ apiKeys, apiKey, currentKey }) {
     setTimeout(() => setCopied(null), 1200);
   }
 
+  async function generateKey() {
+    setGenerating(true);
+    try {
+      const res = await fetch('/api/dashboard/keys', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'new key' }),
+      });
+      const d = await res.json();
+      if (d.key) setNewGeneratedKey(d.key);
+    } catch {
+      // silently ignore
+    }
+    setGenerating(false);
+  }
+
+  function copyNewKey() {
+    navigator.clipboard?.writeText(newGeneratedKey);
+    setNewKeyCopied(true);
+    setTimeout(() => setNewKeyCopied(false), 1500);
+  }
+
   return (
     <div>
       <div className="section-h">
         <h2>API keys</h2>
+        <button className="btn btn-primary btn-sm" onClick={generateKey} disabled={generating}>
+          {generating ? 'generating…' : '+ Generate key'}
+        </button>
       </div>
+
+      {newGeneratedKey && (
+        <div style={{ marginBottom: 20, padding: 20, border: '1px solid var(--accent-line)', borderRadius: 8, background: 'var(--accent-soft)' }}>
+          <div className="mono" style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 10 }}>
+            New key — save this now, it won't be shown again
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+            <code style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '10px 12px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text)', wordBreak: 'break-all' }}>
+              {newGeneratedKey}
+            </code>
+            <button
+              className={'copy-btn' + (newKeyCopied ? ' copied' : '')}
+              onClick={copyNewKey}
+              style={{ flexShrink: 0, padding: '8px 12px' }}
+            >
+              {newKeyCopied ? 'copied ✓' : 'copy'}
+            </button>
+          </div>
+          <button
+            onClick={() => setNewGeneratedKey(null)}
+            style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            dismiss
+          </button>
+        </div>
+      )}
 
       <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-1)', marginBottom: 32 }}>
         <table className="table">
@@ -488,39 +549,163 @@ function KeysTab({ apiKeys, apiKey, currentKey }) {
   );
 }
 
-function BillingTab({ plan }) {
+function BillingTab({ plan, apiKey }) {
+  const [annual, setAnnual] = useState(false);
+  const [loading, setLoading] = useState(null);
+  const [billingStatus, setBillingStatus] = useState(null);
+  const [billingError, setBillingError] = useState(null);
+
+  useEffect(() => {
+    if (!apiKey) return;
+    fetch('/api/billing/status', { headers: { Authorization: 'Bearer ' + apiKey } })
+      .then(r => r.json())
+      .then(d => { if (!d.error) setBillingStatus(d); })
+      .catch(() => {});
+  }, [apiKey]);
+
+  async function startCheckout(targetPlan) {
+    setBillingError(null);
+    setLoading(targetPlan);
+    try {
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: targetPlan, interval: annual ? 'annual' : 'monthly' }),
+      });
+      const d = await res.json();
+      if (d.url) window.location.href = d.url;
+      else setBillingError(d.error || 'Checkout failed — try again.');
+    } catch (e) {
+      setBillingError('Checkout failed: ' + e.message);
+    }
+    setLoading(null);
+  }
+
+  async function openPortal() {
+    setBillingError(null);
+    setLoading('portal');
+    try {
+      const res = await fetch('/api/billing/portal', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+      });
+      const d = await res.json();
+      if (d.url) window.location.href = d.url;
+      else setBillingError(d.error || 'Subscribe first to manage billing.');
+    } catch (e) {
+      setBillingError('Portal failed: ' + e.message);
+    }
+    setLoading(null);
+  }
+
+  const sub = billingStatus?.subscription;
+  const currentPlan = billingStatus?.plan || plan;
+  const isPaid = currentPlan !== 'free';
+
   return (
     <div>
       <div className="section-h"><h2>Billing</h2></div>
+
+      {billingError && (
+        <div style={{ marginBottom: 16, padding: '10px 14px', background: 'rgba(255,92,92,0.06)', border: '1px solid rgba(255,92,92,0.3)', borderRadius: 6, fontSize: 13, color: 'var(--danger)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {billingError}
+          <button onClick={() => setBillingError(null)} style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 12 }}>✕</button>
+        </div>
+      )}
+
+      {/* Current plan card */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 32 }}>
         <div className="card">
           <div className="mono muted-2" style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Current plan</div>
-          <div style={{ fontSize: 28, fontWeight: 600, marginTop: 8, textTransform: 'capitalize' }}>
-            {plan} {plan === 'pro' && <><span style={{ color: 'var(--accent)' }}>·</span> $12/mo</>}
-            {plan === 'team' && <><span style={{ color: 'var(--accent)' }}>·</span> $48/mo</>}
-            {plan === 'free' && <><span style={{ color: 'var(--accent)' }}>·</span> $0</>}
+          <div style={{ fontSize: 28, fontWeight: 600, marginTop: 8, textTransform: 'capitalize', display: 'flex', alignItems: 'center', gap: 10 }}>
+            {currentPlan}
+            {isPaid && <span className="pill pill-ok" style={{ fontSize: 10 }}><span className="dot" />{billingStatus?.status || 'active'}</span>}
           </div>
           <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
-            {plan === 'free' ? 'Free forever. Upgrade to unlock more.' : 'Renews next billing cycle. Cancel anytime.'}
+            {!isPaid
+              ? 'Free forever. Upgrade for more uploads, larger files, and MCP access.'
+              : sub?.cancel_at_period_end
+                ? `Cancels ${new Date(sub.current_period_end).toLocaleDateString()}.`
+                : `Renews ${sub ? new Date(sub.current_period_end).toLocaleDateString() : 'next cycle'}. Cancel anytime.`}
           </p>
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-            <Link className="btn btn-secondary btn-sm" to="/pricing">Manage plan</Link>
-            <button className="btn btn-ghost btn-sm">View invoices</button>
+            {isPaid ? (
+              <>
+                <button className="btn btn-secondary btn-sm" onClick={openPortal} disabled={loading === 'portal'}>
+                  {loading === 'portal' ? 'loading…' : 'Manage subscription'}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={openPortal} disabled={loading === 'portal'}>
+                  View invoices
+                </button>
+              </>
+            ) : (
+              <Link className="btn btn-secondary btn-sm" to="/pricing">View plans</Link>
+            )}
           </div>
         </div>
+
         <div className="card">
-          <div className="mono muted-2" style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Payment method</div>
-          {plan === 'free' ? (
-            <p className="muted" style={{ fontSize: 14, marginTop: 12 }}>No payment method on file.</p>
+          <div className="mono muted-2" style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            {isPaid ? 'Payment method' : 'Upgrade'}
+          </div>
+          {isPaid ? (
+            <>
+              <p className="muted" style={{ fontSize: 13, marginTop: 12 }}>Manage your payment method and billing history through the Stripe portal.</p>
+              <button className="btn btn-secondary btn-sm" style={{ marginTop: 16 }} onClick={openPortal}>
+                Open billing portal
+              </button>
+            </>
           ) : (
             <>
-              <div style={{ fontSize: 18, fontWeight: 500, marginTop: 12, fontFamily: 'var(--mono)' }}>•••• •••• •••• 4242</div>
-              <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Visa · expires 09/29</p>
-              <button className="btn btn-secondary btn-sm" style={{ marginTop: 16 }}>Update card</button>
+              <div style={{ display: 'inline-flex', marginTop: 16, padding: 4, background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 100 }}>
+                <button onClick={() => setAnnual(false)} className="btn btn-sm" style={{ background: !annual ? 'var(--accent)' : 'transparent', color: !annual ? '#000' : 'var(--text-2)', borderColor: 'transparent', borderRadius: 100, padding: '0 14px', height: 28 }}>Monthly</button>
+                <button onClick={() => setAnnual(true)} className="btn btn-sm" style={{ background: annual ? 'var(--accent)' : 'transparent', color: annual ? '#000' : 'var(--text-2)', borderColor: 'transparent', borderRadius: 100, padding: '0 14px', height: 28 }}>
+                  Annual <span style={{ fontSize: 10, color: annual ? '#000' : 'var(--accent)', marginLeft: 4 }}>−17%</span>
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ justifyContent: 'center' }}
+                  onClick={() => startCheckout('pro')}
+                  disabled={!!loading}
+                >
+                  {loading === 'pro' ? 'loading…' : `Upgrade to Pro — $${annual ? '10' : '12'}/mo`}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  style={{ justifyContent: 'center' }}
+                  onClick={() => startCheckout('team')}
+                  disabled={!!loading}
+                >
+                  {loading === 'team' ? 'loading…' : `Upgrade to Team — $${annual ? '40' : '48'}/mo`}
+                </button>
+              </div>
             </>
           )}
         </div>
       </div>
+
+      {/* Plan comparison inline */}
+      {!isPaid && (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', background: 'var(--bg-1)', fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)' }}>
+            What you unlock
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid var(--border)' }}>
+            {[
+              { label: 'Free (current)', items: ['500 MB / upload', '20 uploads / day', '48h max TTL', 'Public links only'] },
+              { label: 'Pro · $12/mo', items: ['50 GB / upload', 'Unlimited / day', '30d max TTL', 'Password links + MCP'], accent: true },
+              { label: 'Team · $48/mo', items: ['100 GB / upload', '5,000 / day', '180d max TTL', 'SSO + audit stream'] },
+            ].map(({ label, items, accent }) => (
+              <div key={label} style={{ padding: '16px 20px', borderRight: '1px solid var(--border)', background: accent ? 'var(--accent-soft)' : 'transparent' }}>
+                <div className="mono" style={{ fontSize: 11, color: accent ? 'var(--accent)' : 'var(--text-3)', marginBottom: 12, letterSpacing: '0.06em' }}>{label}</div>
+                {items.map(i => <div key={i} style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 6 }}>▸ {i}</div>)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
