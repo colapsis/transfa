@@ -5,44 +5,55 @@ const db = require('../db');
 
 const router = express.Router();
 
-// In-memory session store: token → { expiresAt }
-const sessions = new Map();
-// Brute-force tracking: ip → { count, lockedUntil }
+const SESSION_TTL = 8 * 60 * 60 * 1000; // 8 hours
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 15 * 60 * 1000;
+
+// Brute-force tracking per worker (acceptable — each worker still limits to 5 attempts)
 const loginAttempts = new Map();
 
-const SESSION_TTL = 60 * 60 * 1000; // 1 hour
-const MAX_ATTEMPTS = 5;
-const LOCKOUT_MS = 15 * 60 * 1000; // 15 min
+function getSecret() {
+  // Use ADMIN_PASSWORD as HMAC secret so tokens are invalidated if password changes
+  return process.env.ADMIN_PASSWORD || 'fallback-insecure';
+}
+
+function createToken() {
+  const expiresAt = Date.now() + SESSION_TTL;
+  const payload = Buffer.from(String(expiresAt)).toString('base64url');
+  const sig = crypto.createHmac('sha256', getSecret()).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+
+function verifyToken(token) {
+  if (!token || typeof token !== 'string') return false;
+  const dot = token.lastIndexOf('.');
+  if (dot === -1) return false;
+  const payload = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  const expected = crypto.createHmac('sha256', getSecret()).update(payload).digest('base64url');
+  try {
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return false;
+  } catch { return false; }
+  const expiresAt = parseInt(Buffer.from(payload, 'base64url').toString());
+  return !isNaN(expiresAt) && Date.now() < expiresAt;
+}
 
 function timingSafeEqual(a, b) {
   const bufA = Buffer.from(a);
   const bufB = Buffer.from(b);
   if (bufA.length !== bufB.length) {
-    // Still do comparison to avoid timing leak on length
     crypto.timingSafeEqual(bufA, Buffer.alloc(bufA.length));
     return false;
   }
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-function cleanupSessions() {
-  const now = Date.now();
-  for (const [token, s] of sessions) {
-    if (s.expiresAt <= now) sessions.delete(token);
-  }
-}
-
 function requireAdmin(req, res, next) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'unauthorized' });
-  const session = sessions.get(token);
-  if (!session || session.expiresAt <= Date.now()) {
-    sessions.delete(token);
-    return res.status(401).json({ error: 'session expired' });
+  if (!token || !verifyToken(token)) {
+    return res.status(401).json({ error: 'unauthorized' });
   }
-  // Rolling expiry
-  session.expiresAt = Date.now() + SESSION_TTL;
   next();
 }
 
@@ -75,18 +86,12 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ error: 'invalid credentials' });
   }
 
-  // Success — reset attempts, issue token
   loginAttempts.delete(ip);
-  cleanupSessions();
-  const token = crypto.randomBytes(32).toString('hex');
-  sessions.set(token, { expiresAt: Date.now() + SESSION_TTL });
-  res.json({ token });
+  res.json({ token: createToken() });
 });
 
-// POST /api/admin/logout
-router.post('/logout', requireAdmin, (req, res) => {
-  const token = req.headers.authorization.slice(7);
-  sessions.delete(token);
+// POST /api/admin/logout — client just discards token; nothing to revoke server-side
+router.post('/logout', (req, res) => {
   res.json({ ok: true });
 });
 
@@ -152,7 +157,6 @@ router.get('/system', requireAdmin, (req, res) => {
   const loadRaw = safe('cat /proc/loadavg');
   const pmRaw = safe('pm2 jlist');
 
-  // Parse df
   let disk = null;
   if (dfRaw) {
     const lines = dfRaw.split('\n');
@@ -162,7 +166,6 @@ router.get('/system', requireAdmin, (req, res) => {
     }
   }
 
-  // Parse free -m
   let memory = null;
   if (freeRaw) {
     const lines = freeRaw.split('\n');
@@ -173,14 +176,12 @@ router.get('/system', requireAdmin, (req, res) => {
     }
   }
 
-  // Parse load
   let load = null;
   if (loadRaw) {
     const parts = loadRaw.split(' ');
     load = { '1m': parts[0], '5m': parts[1], '15m': parts[2] };
   }
 
-  // Parse pm2
   let processes = [];
   if (pmRaw) {
     try {
