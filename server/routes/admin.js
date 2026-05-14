@@ -144,6 +144,54 @@ router.get('/stats', requireAdmin, (req, res) => {
   });
 });
 
+// GET /api/admin/audit?limit=100 — unified event stream: uploads, downloads, deletions
+router.get('/audit', requireAdmin, (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+
+  const events = db.prepare(`
+    SELECT 'upload' AS type,
+           u.created_at AS ts,
+           u.id         AS upload_id,
+           u.original_filename,
+           u.size,
+           u.uploader_name,
+           NULL AS ip,
+           NULL AS user_agent
+    FROM uploads u
+
+    UNION ALL
+
+    SELECT 'download' AS type,
+           dl.downloaded_at AS ts,
+           dl.upload_id,
+           u.original_filename,
+           u.size,
+           u.uploader_name,
+           dl.ip,
+           dl.user_agent
+    FROM download_log dl
+    JOIN uploads u ON u.id = dl.upload_id
+
+    UNION ALL
+
+    SELECT 'delete' AS type,
+           u.deleted_at AS ts,
+           u.id,
+           u.original_filename,
+           u.size,
+           u.uploader_name,
+           NULL,
+           NULL
+    FROM uploads u
+    WHERE u.deleted_at IS NOT NULL
+
+    ORDER BY ts DESC
+    LIMIT ?
+  `).all(limit);
+
+  res.json({ events });
+});
+
 // GET /api/admin/system
 router.get('/system', requireAdmin, (req, res) => {
   function safe(cmd) {

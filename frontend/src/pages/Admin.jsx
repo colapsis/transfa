@@ -49,6 +49,7 @@ export default function Admin() {
   const [tab, setTab] = useState('overview');
   const [stats, setStats] = useState(null);
   const [system, setSystem] = useState(null);
+  const [audit, setAudit] = useState(null);
   const [statsError, setStatsError] = useState('');
 
   const logout = () => {
@@ -57,6 +58,7 @@ export default function Admin() {
     setToken('');
     setStats(null);
     setSystem(null);
+    setAudit(null);
   };
 
   const loadStats = useCallback(async (tok) => {
@@ -76,11 +78,20 @@ export default function Admin() {
     } catch { /* silent */ }
   }, []);
 
+  const loadAudit = useCallback(async (tok) => {
+    try {
+      const r = await fetch(API + '/audit?limit=200', { headers: { Authorization: 'Bearer ' + tok } });
+      if (r.status === 401) { logout(); return; }
+      setAudit(await r.json());
+    } catch { /* silent */ }
+  }, []);
+
   useEffect(() => {
     if (!token) return;
     loadStats(token);
     loadSystem(token);
-    const t = setInterval(() => { loadStats(token); loadSystem(token); }, 30000);
+    loadAudit(token);
+    const t = setInterval(() => { loadStats(token); loadSystem(token); loadAudit(token); }, 30000);
     return () => clearInterval(t);
   }, [token]);
 
@@ -163,7 +174,7 @@ export default function Admin() {
 
       {/* Tabs */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '0 32px', display: 'flex', gap: 4 }}>
-        {['overview', 'users', 'system'].map(t => (
+        {['overview', 'users', 'audit', 'system'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -179,7 +190,7 @@ export default function Admin() {
         ))}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
           <button
-            onClick={() => { loadStats(token); loadSystem(token); }}
+            onClick={() => { loadStats(token); loadSystem(token); loadAudit(token); }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 12, fontFamily: 'var(--mono)', padding: '0 8px' }}
           >
             ↻ refresh
@@ -284,6 +295,68 @@ export default function Admin() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* AUDIT TAB */}
+        {tab === 'audit' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <span className="mono muted" style={{ fontSize: 12 }}>
+                {audit?.events ? `${audit.events.length} events` : 'loading…'}
+              </span>
+              <button
+                className="btn btn-secondary"
+                style={{ height: 28, padding: '0 12px', fontSize: 12 }}
+                onClick={() => loadAudit(token)}
+              >
+                ↻ refresh
+              </button>
+            </div>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg-1)', overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 680 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      {['Type', 'When', 'File', 'Size', 'Uploader', 'IP'].map(h => (
+                        <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 500, color: 'var(--text-3)', fontSize: 11, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {audit?.events ? audit.events.map((e, i) => {
+                      const typeColor = e.type === 'upload' ? 'var(--ok)' : e.type === 'download' ? 'var(--accent)' : 'var(--danger)';
+                      const when = new Date(e.ts * 1000);
+                      const whenStr = when.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + when.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                      const ua = e.user_agent ? e.user_agent.slice(0, 40) + (e.user_agent.length > 40 ? '…' : '') : null;
+                      return (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '8px 16px' }}>
+                            <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: typeColor, background: typeColor + '18', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.04em' }}>{e.type}</span>
+                          </td>
+                          <td style={{ padding: '8px 16px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{whenStr}</td>
+                          <td style={{ padding: '8px 16px', fontFamily: 'var(--mono)', fontSize: 12, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <span title={e.original_filename}>{e.original_filename || '—'}</span>
+                          </td>
+                          <td style={{ padding: '8px 16px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{fmt(e.size)}</td>
+                          <td style={{ padding: '8px 16px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-2)' }}>{e.uploader_name || <span style={{ color: 'var(--text-3)' }}>guest</span>}</td>
+                          <td style={{ padding: '8px 16px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-3)' }}>
+                            {e.ip ? (
+                              <span title={e.user_agent || ''}>{e.ip}</span>
+                            ) : '—'}
+                          </td>
+                        </tr>
+                      );
+                    }) : (
+                      <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--mono)', fontSize: 13 }}>loading…</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {audit?.events?.length === 0 && (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--mono)', fontSize: 13 }}>no events yet</div>
+              )}
             </div>
           </div>
         )}
