@@ -90,6 +90,7 @@ export default function Landing() {
       <HeroUpload />
       <Logos />
       <HowItWorks />
+      <GitHubActions />
       <ForAgents />
       <PricingTeaser />
       <FAQ />
@@ -140,16 +141,6 @@ function Hero() {
             <span className="tok-ok">→ Agent Link</span>{'  '}<span className="tok-str">https://transfa.sh/api/download/a7f9k2</span>{'\n'}
             <span className="tok-dim">→ Human Link</span>{'  '}https://transfa.sh/f/a7f9k2{'\n\n'}
             <span className="tok-dim">  key saved → ~/.transfa/config.json</span>
-          </CodeWindow>
-
-          <CodeWindow title=".github/workflows/ci.yml" lang="yaml" style={{ marginTop: 12 }}>
-            <span className="tok-c"># .github/workflows/ci.yml</span>{'\n'}
-            <span className="tok-dim">- </span><span className="tok-cmd">uses</span>{': '}<span className="tok-str">colapsis/transfa-action@v1</span>{'\n'}
-            {'  '}<span className="tok-cmd">id</span>{': '}<span className="tok-out">upload</span>{'\n'}
-            {'  '}<span className="tok-cmd">with</span>:{'\n'}
-            {'    '}<span className="tok-cmd">file</span>{': '}<span className="tok-str">./dist/report.pdf</span>{'\n'}
-            {'    '}<span className="tok-cmd">api-key</span>{': '}<span className="tok-str">{'${{ secrets.TRANSFA_API_KEY }}'}</span>{'\n'}
-            <span className="tok-dim">- </span><span className="tok-cmd">run</span>{': '}<span className="tok-str">{'echo "${{ steps.upload.outputs.agent-link }}" >> $GITHUB_STEP_SUMMARY'}</span>
           </CodeWindow>
 
           <div className="mini-stats" style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
@@ -438,6 +429,58 @@ function HowItWorks() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function GitHubActions() {
+  return (
+    <section style={{ padding: '120px 32px', borderBottom: '1px solid var(--border)' }}>
+      <div className="container">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 80, alignItems: 'center' }}>
+          <div>
+            <div className="eyebrow">CI/CD</div>
+            <h2 className="h2" style={{ marginTop: 16 }}>
+              Ship artifacts from <span style={{ color: 'var(--accent)' }}>any CI run.</span>
+            </h2>
+            <p className="lead" style={{ marginTop: 24 }}>
+              One step uploads any file and writes signed links directly into your job summary, Slack notifications, or downstream steps. No shell scripting, no credentials juggling.
+            </p>
+            <ul style={{ marginTop: 28, listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[
+                ['agent-link', 'Direct download URL for scripts and agents'],
+                ['human-link', 'Browser-friendly share page for teammates'],
+                ['sha256',     'Content hash for artifact integrity checks'],
+                ['expires-at', 'ISO timestamp for downstream TTL logic'],
+              ].map(([out, desc]) => (
+                <li key={out} style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', minWidth: 90 }}>{out}</span>
+                  <span style={{ fontSize: 14, color: 'var(--text-3)' }}>{desc}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <CodeWindow title=".github/workflows/ci.yml" lang="yaml">
+            <span className="tok-c">- name: Upload build artifact</span>{'\n'}
+            {'  '}<span className="tok-cmd">uses</span>{': '}<span className="tok-str">colapsis/transfa-action@v1</span>{'\n'}
+            {'  '}<span className="tok-cmd">id</span>{': '}<span className="tok-out">upload</span>{'\n'}
+            {'  '}<span className="tok-cmd">with</span>:{'\n'}
+            {'    '}<span className="tok-cmd">file</span>{': '}<span className="tok-str">./dist/report.pdf</span>{'\n'}
+            {'    '}<span className="tok-cmd">api-key</span>{': '}<span className="tok-str">{'${{ secrets.TRANSFA_API_KEY }}'}</span>{'\n'}
+            {'    '}<span className="tok-cmd">expires</span>{': '}<span className="tok-str">7d</span>{'\n\n'}
+            <span className="tok-c">- name: Post to summary</span>{'\n'}
+            {'  '}<span className="tok-cmd">run</span>{': '}{'|'}{'\n'}
+            {'    '}<span className="tok-str">{'echo "### Artifact" >> $GITHUB_STEP_SUMMARY'}</span>{'\n'}
+            {'    '}<span className="tok-str">{'echo "${{ steps.upload.outputs.agent-link }}" >> $GITHUB_STEP_SUMMARY'}</span>{'\n\n'}
+            <span className="tok-c"># outputs available in downstream steps:</span>{'\n'}
+            <span className="tok-dim">{'# steps.upload.outputs.agent-link'}</span>{'\n'}
+            <span className="tok-dim">{'# steps.upload.outputs.human-link'}</span>{'\n'}
+            <span className="tok-dim">{'# steps.upload.outputs.sha256'}</span>{'\n'}
+            <span className="tok-dim">{'# steps.upload.outputs.expires-at'}</span>
+          </CodeWindow>
         </div>
       </div>
     </section>
