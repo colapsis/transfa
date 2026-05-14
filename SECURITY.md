@@ -8,7 +8,7 @@ If you discover a security vulnerability in transfa, please report it **privatel
 
 ### How to report
 
-Email: **transfa.sh@gmail.com**
+Email: **tansfa.sh@gmail.com**
 
 Please include:
 - A description of the vulnerability and its potential impact

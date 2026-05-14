@@ -246,7 +246,7 @@ See [`nginx/transfa.conf`](nginx/transfa.conf) for a production-ready nginx conf
 
 ## Security
 
-Found a vulnerability? Please email **transfa.sh@gmail.com** or see [SECURITY.md](SECURITY.md).
+Found a vulnerability? Please email **tansfa.sh@gmail.com** or see [SECURITY.md](SECURITY.md).
 
 Do **not** open a public issue for security reports.
 
