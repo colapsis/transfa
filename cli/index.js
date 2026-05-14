@@ -455,6 +455,57 @@ async function list(opts) {
   }
 }
 
+// ─── Watch command ───
+async function watch(id, opts) {
+  const config = loadConfig();
+  const apiBase = config.api_base || DEFAULT_API;
+
+  const res = await request(`${apiBase}/api/download/info/${id}`, { method: 'GET' });
+  if (res.status !== 200) {
+    console.error(`  error: ${res.body?.error || res.status}`);
+    process.exit(1);
+  }
+
+  const info = res.body;
+  let lastCount = info.download_count;
+  let lastDl = info.last_download_at;
+
+  console.log('');
+  console.log(`  watching  \x1b[32m${info.filename}\x1b[0m`);
+  console.log(`  id        ${id}`);
+  console.log(`  downloads ${lastCount} so far`);
+  console.log(`  \x1b[2mpress ctrl-c to stop\x1b[0m`);
+  console.log('');
+
+  const interval = parseInt(opts.interval) || 5;
+
+  const poll = setInterval(async () => {
+    try {
+      const r = await request(`${apiBase}/api/download/info/${id}`, { method: 'GET' });
+      if (r.status !== 200) return;
+      const d = r.body;
+      if (d.download_count > lastCount) {
+        const newDls = d.download_count - lastCount;
+        const ts = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        console.log(`  \x1b[32m↓ download\x1b[0m  \x1b[2m${ts}\x1b[0m  total: ${d.download_count}`);
+        lastCount = d.download_count;
+        lastDl = d.last_download_at;
+      }
+      if (!d.active) {
+        console.log(`  \x1b[33m! link expired or deleted\x1b[0m`);
+        clearInterval(poll);
+        process.exit(0);
+      }
+    } catch { /* network blip — keep polling */ }
+  }, interval * 1000);
+
+  process.on('SIGINT', () => {
+    clearInterval(poll);
+    console.log('\n  stopped.\n');
+    process.exit(0);
+  });
+}
+
 // ─── Delete command ───
 async function rm(id) {
   const config = loadConfig();
@@ -620,6 +671,7 @@ function help() {
 \x1b[1mUsage:\x1b[0m
   tf upload <file>          upload a file and get a shareable link
   tf run <run-id>           show all artifacts for a pipeline run
+  tf watch <id>             tail download events for an upload in real time
   tf url <id>               print share + download URLs for an upload
   tf list                   list your uploads (--urls to show links)
   tf rm <id>                delete an upload
@@ -651,6 +703,7 @@ function help() {
   tf upload report.pdf --once --quiet
   tf upload weights.pt --run-id=run-42 --step=train --intent=checkpoint
   tf run run-42                                    # show all artifacts for run-42
+  tf watch a7f9k2                                  # live-tail downloads on that file
   cat data.json | tf upload - --name=output.json
 
 \x1b[2mConfig: ${CONFIG_FILE}\x1b[0m
@@ -690,6 +743,12 @@ switch (cmd) {
     const runId = positional[0];
     if (!runId) { console.error('  usage: tf run <run-id>'); process.exit(1); }
     run(runId, opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
+    break;
+  }
+  case 'watch': {
+    const watchId = positional[0];
+    if (!watchId) { console.error('  usage: tf watch <id>'); process.exit(1); }
+    watch(watchId, opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
     break;
   }
   case 'auth': {

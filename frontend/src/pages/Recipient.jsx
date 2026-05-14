@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import QRCode from 'qrcode';
 import { useParams, Link } from 'react-router-dom';
 import { DownloadIcon } from '../components/Icons.jsx';
 import Wordmark from '../components/Wordmark.jsx';
@@ -37,6 +38,9 @@ export default function Recipient() {
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState(null);
   const [unlocked, setUnlocked] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     fetch(`${API_BASE}/info/${id}`)
@@ -65,6 +69,19 @@ export default function Recipient() {
     }, 220);
     return () => clearInterval(t);
   }, [downloading]);
+
+  useEffect(() => {
+    if (!showQr) return;
+    QRCode.toDataURL(window.location.href, { width: 220, margin: 2, color: { dark: '#e8ff47', light: '#0d0d0d' } })
+      .then(setQrDataUrl);
+  }, [showQr]);
+
+  function previewable(mime) {
+    if (!mime) return false;
+    return mime.startsWith('image/') || mime === 'application/pdf' ||
+      mime.startsWith('text/') || mime === 'application/json' ||
+      mime === 'application/xml';
+  }
 
   async function handleUnlock(e) {
     e.preventDefault();
@@ -245,11 +262,35 @@ export default function Recipient() {
           )}
 
           <div style={{ marginTop: 16, position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button className="copy-btn" onClick={() => navigator.clipboard?.writeText(curlCmd)}>curl ↓</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="copy-btn" onClick={() => navigator.clipboard?.writeText(curlCmd)}>curl ↓</button>
+              <button className="copy-btn" onClick={() => setShowQr(q => !q)}>qr</button>
+              {previewable(info.mime_type) && (
+                <button className="copy-btn" onClick={() => setShowPreview(p => !p)}>preview</button>
+              )}
+            </div>
             <div className="mono muted-2" style={{ fontSize: 11 }}>
               {info.uploader_name ? <>sent from <span style={{ color: 'var(--text-2)' }}>{info.uploader_name}</span></> : 'via transfa.sh'}
             </div>
           </div>
+
+          {/* QR code panel */}
+          {showQr && (
+            <div style={{ marginTop: 16, position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '20px 0', borderTop: '1px solid var(--border)' }}>
+              {qrDataUrl
+                ? <img src={qrDataUrl} alt="QR code" style={{ width: 160, height: 160, borderRadius: 8 }} />
+                : <div style={{ width: 160, height: 160, background: 'var(--bg-2)', borderRadius: 8, display: 'grid', placeItems: 'center', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-3)' }}>generating…</div>
+              }
+              <div className="mono muted-2" style={{ fontSize: 11 }}>scan to open on mobile</div>
+            </div>
+          )}
+
+          {/* Inline preview */}
+          {showPreview && previewable(info.mime_type) && (
+            <div style={{ marginTop: 16, position: 'relative', zIndex: 1, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+              <FilePreview id={id} filename={info.filename} mime={info.mime_type} password={unlocked ? password : null} />
+            </div>
+          )}
         </div>
 
         <div className="mono" style={{ fontSize: 11, color: 'var(--text-4)', textAlign: 'center', marginTop: 24, lineHeight: 1.8 }}>
@@ -258,5 +299,41 @@ export default function Recipient() {
         </div>
       </div>
     </div>
+  );
+}
+
+function FilePreview({ id, filename, mime, password }) {
+  const [content, setContent] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const src = `/api/download/${id}${password ? `?password=${encodeURIComponent(password)}` : ''}`;
+
+  useEffect(() => {
+    if (mime.startsWith('image/') || mime === 'application/pdf') {
+      setLoading(false);
+      return;
+    }
+    // Text / JSON / XML — fetch and display
+    fetch(src)
+      .then(r => r.text())
+      .then(t => { setContent(t.slice(0, 20000)); setLoading(false); })
+      .catch(() => { setError('Could not load preview'); setLoading(false); });
+  }, [src, mime]);
+
+  if (loading) return <div className="mono muted" style={{ fontSize: 12, padding: 16 }}>loading preview…</div>;
+  if (error) return <div className="mono" style={{ fontSize: 12, color: 'var(--danger)', padding: 16 }}>{error}</div>;
+
+  if (mime.startsWith('image/')) {
+    return <img src={src} alt={filename} style={{ maxWidth: '100%', borderRadius: 6, display: 'block' }} />;
+  }
+  if (mime === 'application/pdf') {
+    return <iframe src={src} title={filename} style={{ width: '100%', height: 480, border: 'none', borderRadius: 6 }} />;
+  }
+  // Text-based
+  return (
+    <pre style={{ margin: 0, padding: 16, background: 'var(--bg-0)', borderRadius: 6, border: '1px solid var(--border)', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-2)', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 480, overflowY: 'auto', lineHeight: 1.6 }}>
+      {content}
+    </pre>
   );
 }

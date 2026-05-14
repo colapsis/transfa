@@ -418,6 +418,29 @@ router.get('/:run_id', (req, res) => {
   });
 });
 
+// PATCH /api/upload/:id/extend — bump expiry without re-uploading
+router.patch('/:id/extend', (req, res) => {
+  const rawKey = getApiKey(req);
+  const keyRow = resolveKey(rawKey);
+  if (!keyRow) return res.status(401).json({ error: 'invalid api key' });
+
+  const upload = db.prepare(
+    'SELECT * FROM uploads WHERE id = ? AND api_key_id = ? AND deleted_at IS NULL'
+  ).get(req.params.id, keyRow.id);
+
+  if (!upload) return res.status(404).json({ error: 'not found' });
+
+  const ttl = req.body.ttl || '7d';
+  const now = Math.floor(Date.now() / 1000);
+  const addSeconds = parseTTL(ttl);
+  // Extend from current expiry if not yet expired, otherwise from now
+  const base = upload.expires_at > now ? upload.expires_at : now;
+  const newExpiry = base + addSeconds;
+
+  db.prepare('UPDATE uploads SET expires_at = ? WHERE id = ?').run(newExpiry, upload.id);
+  res.json({ id: upload.id, expires_at: new Date(newExpiry * 1000).toISOString() });
+});
+
 // DELETE /api/upload/:id
 router.delete('/:id', (req, res) => {
   const rawKey = getApiKey(req);

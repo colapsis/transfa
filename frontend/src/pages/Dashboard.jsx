@@ -365,6 +365,7 @@ function UploadsTab({ uploads: initialUploads, apiKey }) {
   const [menuPos, setMenuPos] = useState(null);
   const [copied, setCopied] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [extending, setExtending] = useState(null);
 
   useEffect(() => {
     function handleClick(e) {
@@ -421,6 +422,23 @@ function UploadsTab({ uploads: initialUploads, apiKey }) {
     setDeleting(null);
   }
 
+  async function extendUpload(id, ttl = '7d') {
+    setExtending(id);
+    setOpenMenu(null);
+    try {
+      const res = await fetch(`/api/upload/${id}/extend`, {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ttl }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setUploads(prev => prev.map(u => u.id === id ? { ...u, expires_at: d.expires_at } : u));
+      }
+    } catch {}
+    setExtending(null);
+  }
+
   return (
     <div>
       <div className="section-h">
@@ -451,7 +469,7 @@ function UploadsTab({ uploads: initialUploads, apiKey }) {
                 const pillClass = status === 'live' ? 'pill-ok' : status === 'warn' ? 'pill-warn' : 'pill-dead';
                 const shareUrl = `${window.location.origin}/f/${u.id}`;
                 return (
-                  <tr key={u.id} style={{ opacity: deleting === u.id ? 0.4 : 1, transition: 'opacity .2s' }}>
+                  <tr key={u.id} style={{ opacity: deleting === u.id ? 0.4 : 1, transition: 'opacity .2s' }} title={extending === u.id ? 'extending…' : undefined}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <FileTypeBadge filename={u.filename} />
@@ -535,6 +553,21 @@ function UploadsTab({ uploads: initialUploads, apiKey }) {
             >
               open ↗
             </a>
+            <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+            <button
+              className="row-menu-btn"
+              onClick={() => extendUpload(u.id, '7d')}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 16px', background: 'none', border: 'none', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 13, cursor: 'pointer' }}
+            >
+              extend +7d
+            </button>
+            <button
+              className="row-menu-btn"
+              onClick={() => extendUpload(u.id, '30d')}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 16px', background: 'none', border: 'none', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 13, cursor: 'pointer' }}
+            >
+              extend +30d
+            </button>
             <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
             <button
               className="row-menu-btn"
