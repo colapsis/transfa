@@ -498,6 +498,7 @@ button { font-family: inherit; cursor: pointer; }
   .docs-flag-table { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
 
   /* docs sidebar + layout */
+  .docs-sidebar-meta { display: none !important; }
   .layout-sidebar { padding: 0 !important; gap: 0 !important; }
   .sidebar {
     display: flex !important;

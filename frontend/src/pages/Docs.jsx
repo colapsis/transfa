@@ -103,7 +103,7 @@ export default function Docs() {
       />
       <div className="layout-sidebar">
         <aside className="sidebar">
-          <div style={{ marginBottom: 32, padding: '0 10px' }}>
+          <div className="docs-sidebar-meta" style={{ marginBottom: 32, padding: '0 10px' }}>
             <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>docs · v1.4.2</div>
             <div style={{ position: 'relative', marginTop: 12 }}>
               <input
@@ -123,7 +123,15 @@ export default function Docs() {
                   key={it.id}
                   href={'#' + it.id}
                   className={'sidebar-link' + (active === it.id ? ' active' : '')}
-                  onClick={() => setActive(it.id)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setActive(it.id);
+                    const el = document.getElementById(it.id);
+                    if (el) {
+                      const top = el.getBoundingClientRect().top + window.scrollY - 100;
+                      window.scrollTo({ top, behavior: 'smooth' });
+                    }
+                  }}
                 >
                   {it.title}
                 </a>
@@ -131,7 +139,7 @@ export default function Docs() {
             </div>
           ))}
 
-          <div style={{ marginTop: 32, padding: '0 10px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-4)' }}>
+          <div className="docs-sidebar-meta" style={{ marginTop: 32, padding: '0 10px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-4)' }}>
             Last updated 2026-05-11
           </div>
         </aside>
