@@ -1,4 +1,4 @@
-import { useState } from 'react'; // eslint-disable-line
+import { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Footer from '../components/Footer.jsx';
 import CodeWindow, { Sh } from '../components/CodeWindow.jsx';
@@ -87,6 +87,7 @@ export default function Landing() {
         jsonLd={LANDING_JSON_LD}
       />
       <Hero />
+      <HeroUpload />
       <Logos />
       <HowItWorks />
       <ForAgents />
@@ -158,6 +159,192 @@ function MiniStat({ label, value }) {
       <div style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)' }}>{label}</div>
       <div style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--text)', marginTop: 4 }}>{value}</div>
     </div>
+  );
+}
+
+function fmtSize(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function HeroUpload() {
+  const [status, setStatus] = useState('idle'); // idle | dragging | uploading | done | error
+  const [progress, setProgress] = useState(0);
+  const [result, setResult] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [filename, setFilename] = useState('');
+  const [filesize, setFilesize] = useState(0);
+  const [copied, setCopied] = useState(null);
+  const inputRef = useRef(null);
+
+  function handleFile(file) {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMsg('Guest uploads are limited to 10 MB — install the CLI for up to 100 GB.');
+      setStatus('error');
+      return;
+    }
+    setFilename(file.name);
+    setFilesize(file.size);
+    setStatus('uploading');
+    setProgress(0);
+
+    const fd = new FormData();
+    fd.append('file', file);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload');
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status === 201 || xhr.status === 200) {
+        setResult(JSON.parse(xhr.responseText));
+        setStatus('done');
+      } else {
+        try { setErrorMsg(JSON.parse(xhr.responseText).error || 'Upload failed'); }
+        catch { setErrorMsg('Upload failed'); }
+        setStatus('error');
+      }
+    };
+    xhr.onerror = () => { setErrorMsg('Network error — check your connection.'); setStatus('error'); };
+    xhr.send(fd);
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    setStatus('idle');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  }
+
+  function onDragOver(e) { e.preventDefault(); setStatus('dragging'); }
+
+  function onDragLeave(e) {
+    if (!e.currentTarget.contains(e.relatedTarget)) setStatus('idle');
+  }
+
+  function copy(key, text) {
+    navigator.clipboard?.writeText(text).catch(() => {});
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  function reset() {
+    setStatus('idle'); setResult(null); setErrorMsg('');
+    setProgress(0); setFilename(''); setFilesize(0);
+    if (inputRef.current) inputRef.current.value = '';
+  }
+
+  const isIdle = status === 'idle' || status === 'error';
+
+  return (
+    <section style={{ padding: '80px 32px', borderBottom: '1px solid var(--border)' }}>
+      <div className="container" style={{ maxWidth: 680 }}>
+        <div className="eyebrow" style={{ marginBottom: 16 }}>Try it now</div>
+        <h2 className="h2" style={{ marginBottom: 40 }}>
+          Drop any file. <span style={{ color: 'var(--accent)' }}>Get a link.</span>
+        </h2>
+
+        {status !== 'done' ? (
+          <div
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onClick={() => isIdle && inputRef.current?.click()}
+            style={{
+              border: `2px dashed ${status === 'dragging' ? 'var(--accent)' : status === 'error' ? 'var(--danger)' : 'var(--border)'}`,
+              borderRadius: 12,
+              padding: '56px 32px',
+              textAlign: 'center',
+              background: status === 'dragging' ? 'var(--accent-soft)' : 'var(--bg-1)',
+              cursor: isIdle ? 'pointer' : 'default',
+              transition: 'border-color 0.15s, background 0.15s',
+            }}
+          >
+            {status === 'uploading' ? (
+              <div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 14, marginBottom: 20 }}>
+                  <span style={{ color: 'var(--text)' }}>{filename}</span>
+                  <span style={{ color: 'var(--text-3)', marginLeft: 12 }}>{fmtSize(filesize)}</span>
+                </div>
+                <div style={{ height: 4, background: 'var(--bg-3)', borderRadius: 99, overflow: 'hidden', maxWidth: 360, margin: '0 auto 12px' }}>
+                  <div style={{ height: '100%', width: progress + '%', background: 'var(--accent)', borderRadius: 99, transition: 'width 0.1s linear' }} />
+                </div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-3)' }}>{progress}%</div>
+              </div>
+            ) : (
+              <div>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={status === 'error' ? 'var(--danger)' : status === 'dragging' ? 'var(--accent)' : 'var(--text-3)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 16 }}>
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                {status === 'error' ? (
+                  <>
+                    <div style={{ color: 'var(--danger)', fontSize: 15, marginBottom: 8 }}>{errorMsg}</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-3)' }}>Click to try again</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 17, fontWeight: 500, marginBottom: 8 }}>
+                      {status === 'dragging' ? 'Release to upload' : 'Drop any file to get a link'}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--text-3)', fontFamily: 'var(--mono)' }}>
+                      or click to browse · up to 10 MB · no account needed
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', background: 'var(--bg-1)' }}>
+            {/* success header */}
+            <div style={{ padding: '20px 28px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ color: 'var(--ok)', fontSize: 18 }}>✓</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 14 }}>{result.filename}</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-3)', marginLeft: 4 }}>{fmtSize(result.bytes)}</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-3)', marginLeft: 'auto' }}>
+                expires {new Date(result.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+            </div>
+
+            {/* links */}
+            {[
+              { key: 'agent', label: '→ agent', url: result.download_url, dim: false },
+              { key: 'share', label: '→ share', url: result.url, dim: true },
+            ].map(({ key, label, url, dim }) => (
+              <div key={key} style={{ padding: '14px 28px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12, background: dim ? 'transparent' : 'var(--bg)' }}>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: dim ? 'var(--text-3)' : 'var(--ok)', minWidth: 60 }}>{label}</span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: dim ? 'var(--text-2)' : 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</span>
+                <button
+                  onClick={() => copy(key, url)}
+                  style={{ flexShrink: 0, background: copied === key ? 'var(--accent-soft)' : 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', fontFamily: 'var(--mono)', fontSize: 11, color: copied === key ? 'var(--accent)' : 'var(--text-2)', cursor: 'pointer', transition: 'all 0.15s' }}
+                >
+                  {copied === key ? 'copied!' : 'copy'}
+                </button>
+              </div>
+            ))}
+
+            {/* footer */}
+            <div style={{ padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-4)' }}>
+                sha256: {result.sha256?.slice(0, 8)}…{result.sha256?.slice(-4)}
+              </span>
+              <button
+                onClick={reset}
+                style={{ background: 'none', border: 'none', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', cursor: 'pointer', padding: 0 }}
+              >
+                + upload another
+              </button>
+            </div>
+          </div>
+        )}
+
+        <input ref={inputRef} type="file" style={{ display: 'none' }} onChange={e => handleFile(e.target.files[0])} />
+      </div>
+    </section>
   );
 }
 
