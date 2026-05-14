@@ -1,0 +1,1436 @@
+openapi: 3.0.3
+info:
+  title: transfa.sh File-Sharing API
+  description: >
+    REST API for the transfa.sh file-sharing service. Supports anonymous and
+    authenticated uploads, file downloads, pipeline run manifests, user
+    dashboards, webhook endpoints, and Stripe-based billing.
+
+    API keys are prefixed `tf_live_` and must be passed as a Bearer token in
+    the `Authorization` header.
+  version: "1.0.0"
+  contact:
+    url: https://transfa.sh
+
+servers:
+  - url: https://transfa.sh
+    description: Production
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: tf_live_…
+      description: API key prefixed with `tf_live_`
+
+  schemas:
+    # ── Shared / small objects ────────────────────────────────────────────────
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: unauthorized
+
+    # ── Auth ─────────────────────────────────────────────────────────────────
+
+    ApiKeyCreated:
+      type: object
+      required: [key, username, plan]
+      properties:
+        key:
+          type: string
+          description: The newly generated API key
+          example: tf_live_abc123xyz
+        username:
+          type: string
+          description: Auto-generated anonymous username
+          example: user_7f3a
+        plan:
+          type: string
+          description: Plan assigned to the new key
+          example: free
+
+    AuthValidation:
+      type: object
+      required: [username, plan, uploads_today, uploads_limit]
+      properties:
+        username:
+          type: string
+          example: user_7f3a
+        plan:
+          type: string
+          example: free
+        uploads_today:
+          type: integer
+          description: Number of uploads made today under this key
+          example: 3
+        uploads_limit:
+          type: integer
+          description: Maximum uploads allowed per day for this plan (-1 = unlimited)
+          example: 10
+
+    # ── Upload ───────────────────────────────────────────────────────────────
+
+    UploadRecord:
+      type: object
+      required:
+        - id
+        - download_url
+        - url
+        - filename
+        - bytes
+        - sha256
+        - expires_at
+        - created_at
+        - download_count
+      properties:
+        id:
+          type: string
+          description: Unique upload identifier
+          example: g7Hk2pQr
+        download_url:
+          type: string
+          format: uri
+          description: Direct download URL
+          example: https://transfa.sh/api/download/g7Hk2pQr
+        url:
+          type: string
+          format: uri
+          description: Short URL for the upload
+          example: https://transfa.sh/f/g7Hk2pQr
+        filename:
+          type: string
+          example: report.pdf
+        bytes:
+          type: integer
+          format: int64
+          description: File size in bytes
+          example: 204800
+        sha256:
+          type: string
+          description: Hex-encoded SHA-256 digest of the file
+          example: e3b0c44298fc1c149afb
+        expires_at:
+          type: integer
+          format: int64
+          description: Unix timestamp (seconds) when the upload expires
+          example: 1720000000
+        created_at:
+          type: integer
+          format: int64
+          description: Unix timestamp (seconds) when the upload was created
+          example: 1719000000
+        download_count:
+          type: integer
+          example: 0
+        run_id:
+          type: string
+          nullable: true
+          description: Pipeline run identifier (if set at upload time)
+          example: run_abc
+        step:
+          type: string
+          nullable: true
+          description: Pipeline step name
+          example: build
+        consumer:
+          type: string
+          nullable: true
+          description: Intended consumer of this artifact
+          example: deploy-job
+        intent:
+          type: string
+          nullable: true
+          description: Intended use of this file
+          example: artifact
+        api_key:
+          type: string
+          nullable: true
+          description: API key used for the upload (only returned at upload time)
+          example: tf_live_abc123xyz
+
+    UploadListResponse:
+      type: object
+      required: [uploads, total, limit, offset]
+      properties:
+        uploads:
+          type: array
+          items:
+            $ref: "#/components/schemas/UploadRecord"
+        total:
+          type: integer
+          description: Total number of uploads owned by this key
+          example: 42
+        limit:
+          type: integer
+          example: 20
+        offset:
+          type: integer
+          example: 0
+
+    ExtendRequest:
+      type: object
+      required: [ttl]
+      properties:
+        ttl:
+          type: string
+          description: Duration string to add to the current expiry (e.g. "7d", "24h")
+          example: 7d
+
+    ExtendResponse:
+      type: object
+      required: [id, expires_at]
+      properties:
+        id:
+          type: string
+          example: g7Hk2pQr
+        expires_at:
+          type: integer
+          format: int64
+          example: 1720604800
+
+    # ── Download ─────────────────────────────────────────────────────────────
+
+    VerifyResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+          description: Whether the supplied password is correct
+          example: true
+        code:
+          type: string
+          nullable: true
+          description: Machine-readable reason when ok is false
+          example: wrong_password
+
+    FileInfo:
+      type: object
+      required:
+        - id
+        - filename
+        - bytes
+        - sha256
+        - mime_type
+        - download_count
+        - has_password
+        - expires_at
+        - created_at
+        - uploader_name
+        - expired
+        - active
+      properties:
+        id:
+          type: string
+          example: g7Hk2pQr
+        filename:
+          type: string
+          example: report.pdf
+        bytes:
+          type: integer
+          format: int64
+          example: 204800
+        sha256:
+          type: string
+          example: e3b0c44298fc1c149afb
+        mime_type:
+          type: string
+          example: application/pdf
+        download_count:
+          type: integer
+          example: 2
+        max_downloads:
+          type: integer
+          nullable: true
+          description: Maximum allowed downloads; null means unlimited
+          example: 10
+        has_password:
+          type: boolean
+          example: false
+        expires_at:
+          type: integer
+          format: int64
+          example: 1720000000
+        created_at:
+          type: integer
+          format: int64
+          example: 1719000000
+        uploader_name:
+          type: string
+          example: user_7f3a
+        expired:
+          type: boolean
+          example: false
+        active:
+          type: boolean
+          description: True when the file is still downloadable
+          example: true
+        last_download_at:
+          type: integer
+          format: int64
+          nullable: true
+          example: 1719500000
+        run_id:
+          type: string
+          nullable: true
+          example: run_abc
+        step:
+          type: string
+          nullable: true
+          example: build
+        consumer:
+          type: string
+          nullable: true
+          example: deploy-job
+        intent:
+          type: string
+          nullable: true
+          example: artifact
+
+    # ── Run ──────────────────────────────────────────────────────────────────
+
+    RunManifest:
+      type: object
+      required: [run_id, total, created_at, artifacts]
+      properties:
+        run_id:
+          type: string
+          example: run_abc
+        total:
+          type: integer
+          description: Total number of artifacts in this run
+          example: 3
+        created_at:
+          type: integer
+          format: int64
+          example: 1719000000
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/FileInfo"
+
+    # ── Dashboard ────────────────────────────────────────────────────────────
+
+    DashboardApiKey:
+      type: object
+      required: [id, name, scope]
+      properties:
+        id:
+          type: string
+          example: key_01
+        name:
+          type: string
+          example: CI pipeline key
+        scope:
+          type: string
+          example: upload
+
+    DashboardResponse:
+      type: object
+      description: Summary stats, recent uploads, and API keys for the authenticated user
+      properties:
+        uploads:
+          type: array
+          items:
+            $ref: "#/components/schemas/UploadRecord"
+        api_keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardApiKey"
+
+    CreateKeyRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Human-readable label for the new key
+          example: CI pipeline key
+
+    CreateKeyResponse:
+      type: object
+      required: [id, key, name, scope]
+      properties:
+        id:
+          type: string
+          example: key_01
+        key:
+          type: string
+          description: The raw API key value (only returned once)
+          example: tf_live_xyz789
+        name:
+          type: string
+          example: CI pipeline key
+        scope:
+          type: string
+          example: upload
+
+    RevokeKeyRequest:
+      type: object
+      required: [key_id]
+      properties:
+        key_id:
+          type: string
+          example: key_01
+
+    ChangeUsernameRequest:
+      type: object
+      required: [username]
+      properties:
+        username:
+          type: string
+          example: mynewname
+
+    AuditEvent:
+      type: object
+      description: A single entry from the download/event audit log
+      properties:
+        id:
+          type: integer
+          example: 1001
+        upload_id:
+          type: string
+          example: g7Hk2pQr
+        event:
+          type: string
+          example: download
+        ip:
+          type: string
+          example: 1.2.3.4
+        user_agent:
+          type: string
+          nullable: true
+          example: curl/7.81.0
+        created_at:
+          type: integer
+          format: int64
+          example: 1719500000
+
+    # ── Webhooks ─────────────────────────────────────────────────────────────
+
+    WebhookEndpoint:
+      type: object
+      required: [id, url, events, enabled]
+      properties:
+        id:
+          type: string
+          example: wh_01
+        url:
+          type: string
+          format: uri
+          example: https://example.com/hooks/transfa
+        events:
+          type: array
+          items:
+            type: string
+          example: [upload.created, upload.downloaded]
+        enabled:
+          type: boolean
+          example: true
+
+    CreateWebhookRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          example: https://example.com/hooks/transfa
+        secret:
+          type: string
+          description: Optional signing secret for HMAC verification
+          example: whsec_abc123
+        events:
+          type: array
+          items:
+            type: string
+          description: Event types to subscribe to; omit for all events
+          example: [upload.created, upload.downloaded]
+
+    UpdateWebhookRequest:
+      type: object
+      description: All fields are optional; only supplied fields are updated
+      properties:
+        url:
+          type: string
+          format: uri
+          example: https://example.com/hooks/transfa-v2
+        secret:
+          type: string
+          example: whsec_newvalue
+        events:
+          type: array
+          items:
+            type: string
+          example: [upload.created]
+        enabled:
+          type: boolean
+          example: false
+
+    # ── Profile ──────────────────────────────────────────────────────────────
+
+    PublicProfile:
+      type: object
+      required: [username, plan, uploads]
+      properties:
+        username:
+          type: string
+          example: alice
+        plan:
+          type: string
+          example: pro
+        uploads:
+          type: array
+          items:
+            $ref: "#/components/schemas/UploadRecord"
+
+    # ── Billing ──────────────────────────────────────────────────────────────
+
+    BillingStatus:
+      type: object
+      description: Current Stripe subscription details
+      properties:
+        plan:
+          type: string
+          example: pro
+        interval:
+          type: string
+          enum: [month, year]
+          example: month
+        status:
+          type: string
+          description: Stripe subscription status
+          example: active
+        current_period_end:
+          type: integer
+          format: int64
+          example: 1722556800
+        cancel_at_period_end:
+          type: boolean
+          example: false
+
+    CheckoutRequest:
+      type: object
+      required: [plan, interval]
+      properties:
+        plan:
+          type: string
+          description: Plan identifier
+          example: pro
+        interval:
+          type: string
+          enum: [month, year]
+          example: month
+
+    SessionUrlResponse:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Stripe-hosted page URL to redirect the user to
+          example: https://checkout.stripe.com/pay/cs_live_abc
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ── Auth ────────────────────────────────────────────────────────────────────
+
+  /api/auth/key:
+    post:
+      tags: [Auth]
+      summary: Generate an anonymous API key
+      description: >
+        Creates a new anonymous account and returns an API key. No request body
+        is required. The key can immediately be used as a Bearer token for
+        authenticated endpoints.
+      operationId: createApiKey
+      responses:
+        "200":
+          description: Key generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreated"
+        "429":
+          description: Too many auth attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/auth/validate:
+    get:
+      tags: [Auth]
+      summary: Validate the current API key
+      description: Returns account details and daily usage counters for the authenticated key.
+      operationId: validateApiKey
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Key is valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthValidation"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Upload ──────────────────────────────────────────────────────────────────
+
+  /api/upload:
+    post:
+      tags: [Upload]
+      summary: Upload a file
+      description: >
+        Upload a file using `multipart/form-data`. Authentication is optional;
+        unauthenticated uploads are accepted but subject to stricter limits.
+        The `run_id`, `step`, `consumer`, and `intent` fields attach pipeline
+        metadata to the artifact.
+      operationId: uploadFile
+      security:
+        - BearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file to upload
+                filename:
+                  type: string
+                  description: Override the stored filename (defaults to the original name)
+                  example: my-report.pdf
+                ttl:
+                  type: string
+                  description: >
+                    Time-to-live duration string (e.g. "7d", "24h", "1h").
+                    Defaults to plan maximum when omitted.
+                  example: 7d
+                max_downloads:
+                  type: integer
+                  description: Maximum number of times the file may be downloaded (0 = unlimited)
+                  example: 5
+                password:
+                  type: string
+                  description: Optional password to protect the download
+                  example: hunter2
+                run_id:
+                  type: string
+                  description: Pipeline run identifier for grouping artifacts
+                  example: run_abc
+                step:
+                  type: string
+                  description: Pipeline step name
+                  example: build
+                consumer:
+                  type: string
+                  description: Intended consumer of this artifact
+                  example: deploy-job
+                intent:
+                  type: string
+                  description: Intended use of this file
+                  example: artifact
+      responses:
+        "200":
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadRecord"
+        "400":
+          description: Missing file or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Upload limit reached or rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    get:
+      tags: [Upload]
+      summary: List own uploads
+      description: Returns a paginated list of all uploads owned by the authenticated key.
+      operationId: listUploads
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of results to return (default 20)
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          description: Number of results to skip (for pagination)
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        "200":
+          description: Paginated list of uploads
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadListResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/upload/{id}/extend:
+    patch:
+      tags: [Upload]
+      summary: Extend upload expiry
+      description: Adds the given TTL duration to the upload's current expiry timestamp.
+      operationId: extendUpload
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Upload ID
+          schema:
+            type: string
+            example: g7Hk2pQr
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExtendRequest"
+      responses:
+        "200":
+          description: Expiry updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtendResponse"
+        "400":
+          description: Invalid TTL value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Upload belongs to a different key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Upload not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/upload/{id}:
+    delete:
+      tags: [Upload]
+      summary: Delete an upload
+      description: Permanently deletes the file and its metadata. Only the owning key may delete an upload.
+      operationId: deleteUpload
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Upload ID
+          schema:
+            type: string
+            example: g7Hk2pQr
+      responses:
+        "204":
+          description: Upload deleted successfully
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Upload belongs to a different key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Upload not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Download ────────────────────────────────────────────────────────────────
+
+  /api/download/{id}:
+    get:
+      tags: [Download]
+      summary: Download a file
+      description: >
+        Streams the file to the client. If the file is password-protected,
+        the password must be provided either as the `password` query parameter
+        or in the `X-Transfa-Password` request header.
+      operationId: downloadFile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Upload ID
+          schema:
+            type: string
+            example: g7Hk2pQr
+        - name: password
+          in: query
+          required: false
+          description: Password for protected files
+          schema:
+            type: string
+        - name: X-Transfa-Password
+          in: header
+          required: false
+          description: Alternative way to pass the password for protected files
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File stream
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Password required or incorrect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Upload not found or expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Download limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/download/verify/{id}:
+    get:
+      tags: [Download]
+      summary: Verify download password
+      description: >
+        Checks whether the supplied password is correct for a protected file
+        without actually streaming the file. Returns `ok: true` on success.
+      operationId: verifyPassword
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Upload ID
+          schema:
+            type: string
+            example: g7Hk2pQr
+        - name: password
+          in: query
+          required: false
+          description: Password to verify
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyResponse"
+        "404":
+          description: Upload not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/download/info/{id}:
+    get:
+      tags: [Download]
+      summary: Get file metadata
+      description: Returns public metadata for a file without downloading it. No authentication required.
+      operationId: getFileInfo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Upload ID
+          schema:
+            type: string
+            example: g7Hk2pQr
+      responses:
+        "200":
+          description: File metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileInfo"
+        "404":
+          description: Upload not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Run ─────────────────────────────────────────────────────────────────────
+
+  /api/run/{run_id}:
+    get:
+      tags: [Run]
+      summary: Get pipeline run manifest
+      description: >
+        Returns a manifest listing all artifacts uploaded under the given
+        `run_id`. No authentication is required. Useful for CI/CD pipelines to
+        enumerate build artifacts by run.
+      operationId: getRunManifest
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          description: Pipeline run identifier
+          schema:
+            type: string
+            example: run_abc
+      responses:
+        "200":
+          description: Run manifest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunManifest"
+        "404":
+          description: No uploads found for this run_id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Dashboard ───────────────────────────────────────────────────────────────
+
+  /api/dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Get dashboard summary
+      description: Returns aggregated stats, recent uploads, and all API keys for the authenticated user.
+      operationId: getDashboard
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/keys:
+    post:
+      tags: [Dashboard]
+      summary: Create a new API key
+      description: Creates an additional API key associated with the authenticated account.
+      operationId: createDashboardKey
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateKeyRequest"
+      responses:
+        "200":
+          description: New API key created (raw key is only returned once)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateKeyResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/keys/revoke:
+    post:
+      tags: [Dashboard]
+      summary: Revoke an API key
+      description: Permanently revokes the specified API key. Revoked keys can no longer be used for authentication.
+      operationId: revokeDashboardKey
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevokeKeyRequest"
+      responses:
+        "204":
+          description: Key revoked successfully
+        "400":
+          description: Missing or invalid key_id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Key not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/username:
+    patch:
+      tags: [Dashboard]
+      summary: Change username
+      description: Updates the display username for the authenticated account.
+      operationId: changeUsername
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeUsernameRequest"
+      responses:
+        "204":
+          description: Username updated successfully
+        "400":
+          description: Invalid username (e.g. too short, contains forbidden characters)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Username already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/audit:
+    get:
+      tags: [Dashboard]
+      summary: Download audit log
+      description: Returns the download event log for all uploads owned by the authenticated key.
+      operationId: getAuditLog
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of events to return (default 100)
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+      responses:
+        "200":
+          description: Audit events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditEvent"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Webhooks ────────────────────────────────────────────────────────────────
+
+  /api/webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List webhook endpoints
+      description: Returns all registered webhook endpoints for the authenticated account.
+      operationId: listWebhooks
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of webhook endpoints
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WebhookEndpoint"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    post:
+      tags: [Webhooks]
+      summary: Add a webhook endpoint
+      description: Registers a new URL to receive webhook event deliveries.
+      operationId: createWebhook
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWebhookRequest"
+      responses:
+        "200":
+          description: Webhook endpoint created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookEndpoint"
+        "400":
+          description: Invalid URL or request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/webhooks/{id}:
+    patch:
+      tags: [Webhooks]
+      summary: Update a webhook endpoint
+      description: Updates one or more fields on an existing webhook endpoint. All body fields are optional.
+      operationId: updateWebhook
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Webhook endpoint ID
+          schema:
+            type: string
+            example: wh_01
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWebhookRequest"
+      responses:
+        "200":
+          description: Updated webhook endpoint
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookEndpoint"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Webhook endpoint not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      tags: [Webhooks]
+      summary: Remove a webhook endpoint
+      description: Permanently removes the webhook endpoint and stops all future deliveries to it.
+      operationId: deleteWebhook
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Webhook endpoint ID
+          schema:
+            type: string
+            example: wh_01
+      responses:
+        "204":
+          description: Webhook endpoint removed
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Webhook endpoint not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/webhooks/{id}/test:
+    post:
+      tags: [Webhooks]
+      summary: Send a test delivery
+      description: Sends a synthetic test event to the webhook endpoint to verify delivery is working.
+      operationId: testWebhook
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Webhook endpoint ID
+          schema:
+            type: string
+            example: wh_01
+      responses:
+        "200":
+          description: Test delivery dispatched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Webhook endpoint not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Profile ─────────────────────────────────────────────────────────────────
+
+  /api/u/{username}:
+    get:
+      tags: [Profile]
+      summary: Get public user profile
+      description: Returns the public file listing for a user. No authentication required.
+      operationId: getPublicProfile
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: Username to look up
+          schema:
+            type: string
+            example: alice
+      responses:
+        "200":
+          description: Public profile and uploads
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicProfile"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Billing ─────────────────────────────────────────────────────────────────
+
+  /api/billing/status:
+    get:
+      tags: [Billing]
+      summary: Get subscription status
+      description: Returns the current Stripe subscription details for the authenticated account.
+      operationId: getBillingStatus
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Current billing status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingStatus"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/billing/checkout:
+    post:
+      tags: [Billing]
+      summary: Create a Stripe checkout session
+      description: Creates a Stripe-hosted checkout session for upgrading to a paid plan. Redirect the user to the returned URL.
+      operationId: createCheckoutSession
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutRequest"
+      responses:
+        "200":
+          description: Stripe checkout session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionUrlResponse"
+        "400":
+          description: Invalid plan or interval
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/billing/portal:
+    post:
+      tags: [Billing]
+      summary: Create a Stripe billing portal session
+      description: Creates a Stripe-hosted billing portal session so the user can manage their subscription, payment methods, and invoices. Redirect the user to the returned URL.
+      operationId: createBillingPortalSession
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Stripe billing portal session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionUrlResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: No Stripe customer found for this account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+tags:
+  - name: Auth
+    description: Generate and validate API keys
+  - name: Upload
+    description: Upload files and manage existing uploads
+  - name: Download
+    description: Download files and retrieve metadata
+  - name: Run
+    description: Pipeline run manifests (artifact grouping)
+  - name: Dashboard
+    description: Account management, additional keys, and audit logs
+  - name: Webhooks
+    description: Manage webhook delivery endpoints
+  - name: Profile
+    description: Public user profiles
+  - name: Billing
+    description: Stripe subscription management

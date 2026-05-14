@@ -64,6 +64,9 @@ app.use('/api/u', require('./routes/profile'));
 app.use('/api/billing', require('./routes/billing').router);
 app.use('/api/admin', require('./routes/admin'));
 
+// OpenAPI spec
+app.use('/openapi.yaml', express.static(path.join(__dirname, '../public/openapi.yaml')));
+
 // Serve frontend (built)
 const FRONTEND_DIST = path.join(__dirname, '../frontend/dist');
 app.use(express.static(FRONTEND_DIST));
