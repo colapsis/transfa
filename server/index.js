@@ -59,6 +59,8 @@ app.use('/api/upload', require('./routes/upload'));
 app.use('/api/run', require('./routes/upload'));   // /api/run/:run_id shares the upload router
 app.use('/api/download', require('./routes/download'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/webhooks', require('./routes/webhooks').router);
+app.use('/api/u', require('./routes/profile'));
 app.use('/api/billing', require('./routes/billing').router);
 app.use('/api/admin', require('./routes/admin'));
 

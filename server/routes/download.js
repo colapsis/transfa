@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const db = require('../db');
+const { fireWebhooks } = require('./webhooks');
 
 // GET /api/download/:id — actual file download
 router.get('/:id', (req, res) => {
@@ -53,10 +54,22 @@ router.get('/:id', (req, res) => {
   const stream = fs.createReadStream(upload.storage_path);
   stream.pipe(res);
 
-  setImmediate(() => {
+  setImmediate(async () => {
     try {
       db.prepare('INSERT INTO download_log (upload_id, ip, user_agent) VALUES (?, ?, ?)').run(upload.id, req.ip, req.headers['user-agent'] || null);
       db.prepare('UPDATE uploads SET download_count = download_count + 1 WHERE id = ?').run(upload.id);
+
+      // Fire webhooks for the upload owner
+      const keyRow = db.prepare('SELECT user_id FROM api_keys WHERE id = ?').get(upload.api_key_id);
+      if (keyRow?.user_id) {
+        fireWebhooks(keyRow.user_id, 'upload.downloaded', {
+          upload_id: upload.id,
+          filename: upload.original_filename,
+          size: upload.size,
+          ip: req.ip,
+          download_count: upload.download_count + 1,
+        }).catch(() => {});
+      }
     } catch (e) {
       console.error('[download] log error:', e.message);
     }

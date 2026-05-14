@@ -8,6 +8,7 @@ import Pricing from './pages/Pricing.jsx';
 import Recipient from './pages/Recipient.jsx';
 import Contact from './pages/Contact.jsx';
 import Admin from './pages/Admin.jsx';
+import Profile from './pages/Profile.jsx';
 
 export default function App() {
   const { pathname } = useLocation();
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/f/:id" element={<Recipient />} />
+        <Route path="/u/:username" element={<Profile />} />
       </Routes>
     </HelmetProvider>
   );

@@ -341,7 +341,7 @@ export default function Dashboard() {
           {tab === 'billing' && <BillingTab plan={user.plan} apiKey={apiKey} />}
           {tab === 'settings' && <SettingsTab user={user} apiKey={apiKey} />}
           {tab === 'audit' && <AuditTab apiKey={apiKey} />}
-          {tab === 'webhooks' && <WebhooksTab plan={user.plan} />}
+          {tab === 'webhooks' && <WebhooksTab plan={user.plan} apiKey={apiKey} />}
           {tab === 'team' && <TeamTab plan={user.plan} user={user} />}
           {tab === 'mcp' && <McpTab apiKey={apiKey} currentKey={apiKey} />}
         </main>
@@ -1097,64 +1097,151 @@ function AuditTab({ apiKey }) {
   );
 }
 
-function WebhooksTab({ plan }) {
-  const isPaid = plan === 'pro' || plan === 'team';
+function WebhooksTab({ plan, apiKey }) {
+  const [endpoints, setEndpoints] = useState(null);
   const [url, setUrl] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [secret, setSecret] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [testing, setTesting] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [testResult, setTestResult] = useState(null);
 
-  const events = ['upload.created', 'upload.downloaded', 'upload.expired', 'upload.deleted'];
+  useEffect(() => {
+    fetch('/api/webhooks', { headers: { Authorization: 'Bearer ' + apiKey } })
+      .then(r => r.json())
+      .then(d => setEndpoints(d.endpoints || []))
+      .catch(() => setEndpoints([]));
+  }, [apiKey]);
+
+  async function addEndpoint(e) {
+    e.preventDefault();
+    if (!url) return;
+    setAdding(true);
+    try {
+      const res = await fetch('/api/webhooks', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, secret: secret || undefined, events: 'upload.downloaded' }),
+      });
+      const d = await res.json();
+      if (d.id) {
+        setEndpoints(prev => [...(prev || []), d]);
+        setUrl('');
+        setSecret('');
+      }
+    } catch {}
+    setAdding(false);
+  }
+
+  async function testEndpoint(id) {
+    setTesting(id);
+    setTestResult(null);
+    try {
+      const res = await fetch(`/api/webhooks/${id}/test`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + apiKey },
+      });
+      setTestResult(res.ok ? 'sent' : 'failed');
+    } catch { setTestResult('failed'); }
+    setTesting(null);
+    setTimeout(() => setTestResult(null), 3000);
+  }
+
+  async function deleteEndpoint(id) {
+    setDeleting(id);
+    try {
+      await fetch(`/api/webhooks/${id}`, { method: 'DELETE', headers: { Authorization: 'Bearer ' + apiKey } });
+      setEndpoints(prev => prev.filter(e => e.id !== id));
+    } catch {}
+    setDeleting(null);
+  }
 
   return (
     <div style={{ maxWidth: 720 }}>
       <div className="section-h"><h2>Webhooks</h2></div>
 
-      {!isPaid ? (
-        <div style={{ padding: 32, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg-1)', textAlign: 'center' }}>
-          <div className="mono" style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 12 }}>Pro feature</div>
-          <h3 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 10px' }}>Webhooks require Pro or Team</h3>
-          <p className="muted" style={{ fontSize: 14, margin: '0 0 20px', lineHeight: 1.6 }}>
-            Get notified in real time when files are uploaded, downloaded, or expire. POST events to any URL.
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 320, margin: '0 auto 24px', textAlign: 'left' }}>
-            {events.map(e => (
-              <div key={e} className="mono" style={{ fontSize: 13, color: 'var(--text-2)', display: 'flex', gap: 8 }}>
-                <span style={{ color: 'var(--accent)' }}>▸</span>{e}
-              </div>
-            ))}
+      {/* Add endpoint form */}
+      <div style={{ marginBottom: 28, padding: 20, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-1)' }}>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 16 }}>Add endpoint</div>
+        <form onSubmit={addEndpoint} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <input
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+            placeholder="https://your-server.com/webhooks/transfa"
+            required
+            style={{ background: 'var(--bg-0)', border: '1px solid var(--border)', borderRadius: 6, padding: '10px 12px', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 13, outline: 'none' }}
+          />
+          <input
+            value={secret}
+            onChange={e => setSecret(e.target.value)}
+            placeholder="Signing secret (optional) — used for X-Transfa-Signature"
+            style={{ background: 'var(--bg-0)', border: '1px solid var(--border)', borderRadius: 6, padding: '10px 12px', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 13, outline: 'none' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn btn-primary btn-sm" type="submit" disabled={adding || !url}>
+              {adding ? 'adding…' : '+ Add endpoint'}
+            </button>
           </div>
-          <Link className="btn btn-primary" to="/pricing">Upgrade to Pro</Link>
+        </form>
+      </div>
+
+      {/* Endpoint list */}
+      {endpoints === null ? (
+        <div className="mono muted" style={{ fontSize: 13 }}>loading…</div>
+      ) : endpoints.length === 0 ? (
+        <div style={{ padding: '48px 32px', textAlign: 'center', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-3)', fontFamily: 'var(--mono)', fontSize: 13 }}>
+          no endpoints yet — add one above to receive <span style={{ color: 'var(--accent)' }}>upload.downloaded</span> events
         </div>
       ) : (
-        <div>
-          <div style={{ marginBottom: 24, padding: 20, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-1)' }}>
-            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Endpoint URL</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                value={url}
-                onChange={e => { setUrl(e.target.value); setSaved(false); }}
-                placeholder="https://your-server.com/webhooks/transfa"
-                style={{ flex: 1, background: 'var(--bg-0)', border: '1px solid var(--border)', borderRadius: 6, padding: '10px 12px', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 13, outline: 'none' }}
-              />
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={() => setSaved(true)}
-                disabled={!url}
-              >
-                {saved ? '✓ saved' : 'Save'}
-              </button>
-            </div>
-          </div>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-            <div style={{ padding: '12px 16px', background: 'var(--bg-1)', fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)', borderBottom: '1px solid var(--border)' }}>Events</div>
-            {events.map(e => (
-              <div key={e} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-                <span className="mono" style={{ fontSize: 13 }}>{e}</span>
-                <span className="pill pill-ok" style={{ fontSize: 10 }}><span className="dot" />active</span>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-1)' }}>
+          {endpoints.map((ep, i) => (
+            <div key={ep.id} style={{ padding: '16px 20px', borderBottom: i < endpoints.length - 1 ? '1px solid var(--border)' : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ep.url}</span>
+                <span className={'pill ' + (ep.enabled ? 'pill-ok' : 'pill-dead')} style={{ fontSize: 10, flexShrink: 0 }}>
+                  <span className="dot" />{ep.enabled ? 'active' : 'disabled'}
+                </span>
               </div>
-            ))}
-          </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="mono muted-2" style={{ fontSize: 11, flex: 1 }}>
+                  {ep.events} · {ep.last_fired_at ? `last fired ${timeAgo(new Date(ep.last_fired_at * 1000).toISOString())}` : 'never fired'}
+                  {ep.last_status ? ` · HTTP ${ep.last_status}` : ''}
+                </span>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => testEndpoint(ep.id)}
+                  disabled={testing === ep.id}
+                  style={{ fontSize: 11 }}
+                >
+                  {testing === ep.id ? '…' : testResult && testing !== ep.id ? (testResult === 'sent' ? '✓ sent' : '✗ failed') : 'test'}
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => deleteEndpoint(ep.id)}
+                  disabled={deleting === ep.id}
+                  style={{ color: 'var(--danger)', fontSize: 11 }}
+                >
+                  {deleting === ep.id ? '…' : 'remove'}
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
+
+      {/* Payload reference */}
+      <div style={{ marginTop: 24, padding: 16, background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 8 }}>
+        <div className="mono muted-2" style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>Example payload</div>
+        <pre style={{ margin: 0, fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>{`{
+  "event": "upload.downloaded",
+  "upload_id": "a7f9k2",
+  "filename": "report.pdf",
+  "size": 4200000,
+  "ip": "1.2.3.4",
+  "download_count": 3,
+  "fired_at": "2026-05-14T18:00:00.000Z"
+}`}</pre>
+      </div>
     </div>
   );
 }

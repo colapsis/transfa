@@ -84,4 +84,21 @@ for (const col of ['run_id TEXT', 'step TEXT', 'consumer TEXT', 'intent TEXT']) 
 }
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_uploads_run ON uploads(run_id)'); } catch { /* already exists */ }
 
+// Webhook endpoints table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS webhook_endpoints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    secret TEXT,
+    events TEXT NOT NULL DEFAULT 'upload.downloaded',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    last_fired_at INTEGER,
+    last_status INTEGER,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_webhooks_user ON webhook_endpoints(user_id);
+`);
+
 module.exports = db;
