@@ -72,23 +72,41 @@ async function upload(filePath, opts) {
   const apiKey = config.api_key;
   const apiBase = config.api_base || DEFAULT_API;
 
-  if (!fs.existsSync(filePath)) {
-    console.error(`  error: file not found: ${filePath}`);
-    process.exit(1);
-  }
+  const isStdin = filePath === '-';
+  let size, filename, fileSource;
 
-  const stat = statSync(filePath);
-  const filename = opts.name || path.basename(filePath);
-  const size = stat.size;
+  if (isStdin) {
+    const chunks = [];
+    await new Promise((resolve, reject) => {
+      process.stdin.on('data', c => chunks.push(c));
+      process.stdin.on('end', resolve);
+      process.stdin.on('error', reject);
+    });
+    fileSource = Buffer.concat(chunks);
+    size = fileSource.length;
+    filename = opts.name || 'stdin';
+  } else {
+    if (!fs.existsSync(filePath)) {
+      console.error(`  error: file not found: ${filePath}`);
+      process.exit(1);
+    }
+    const stat = statSync(filePath);
+    size = stat.size;
+    filename = opts.name || path.basename(filePath);
+    fileSource = createReadStream(filePath);
+  }
 
   if (!opts.quiet && !opts.json) {
     console.log(`  ▸ ${filename}  ${formatBytes(size)}`);
   }
 
-  // Build multipart form data manually (no external deps for tiny install)
   const FormData = require('form-data');
   const form = new FormData();
-  form.append('file', createReadStream(filePath), { filename });
+  if (isStdin) {
+    form.append('file', fileSource, { filename, knownLength: size });
+  } else {
+    form.append('file', fileSource, { filename });
+  }
   if (opts.expires || opts.ttl) form.append('ttl', parseTTL(opts.expires || opts.ttl));
   if (opts.name) form.append('filename', opts.name);
   if (opts.max) form.append('max_downloads', String(opts.max));
@@ -164,32 +182,169 @@ async function upload(filePath, opts) {
     console.log('');
   }
 
-  const url = data.url;
-  console.log(`\x1b[32m→ ${url}\x1b[0m`);
+  const agentUrl = data.download_url || data.url;
+  const shareUrl = data.url;
+
+  // Agent link first (direct download, no UI)
+  console.log(`\x1b[32m→ agent\x1b[0m  ${agentUrl}`);
+  // Human link second (recipient page)
+  if (agentUrl !== shareUrl) {
+    console.log(`\x1b[2m→ share\x1b[0m  ${shareUrl}`);
+  }
 
   if (!opts.quiet && !opts.json) {
     console.log('\x1b[2m  copied to clipboard.\x1b[0m');
   }
 
-  // Try to copy to clipboard (best-effort)
+  // Copy the agent URL to clipboard (most useful for piping into tools)
   try {
-    const clipCmd = process.platform === 'darwin' ? `echo "${url}" | pbcopy` :
-                    process.platform === 'win32' ? `echo ${url} | clip` :
-                    `echo "${url}" | xclip -selection clipboard 2>/dev/null || echo "${url}" | xsel --clipboard --input 2>/dev/null`;
+    const clipCmd = process.platform === 'darwin' ? `echo "${agentUrl}" | pbcopy` :
+                    process.platform === 'win32' ? `echo ${agentUrl} | clip` :
+                    `echo "${agentUrl}" | xclip -selection clipboard 2>/dev/null || echo "${agentUrl}" | xsel --clipboard --input 2>/dev/null`;
     require('child_process').execSync(clipCmd, { stdio: 'ignore' });
   } catch {}
 }
 
 // ─── Auth command ───
-function auth(key) {
-  if (!key) {
-    console.error('  usage: transfa auth <api-key>');
+async function auth(key, opts) {
+  const config = loadConfig();
+  const apiBase = config.api_base || DEFAULT_API;
+
+  // Explicit key provided → save it
+  if (key) {
+    config.api_key = key;
+    saveConfig(config);
+    console.log(`  \x1b[32m✓\x1b[0m API key saved to ${CONFIG_FILE}`);
+    return;
+  }
+
+  // Key already saved → show it (don't generate a new one)
+  if (config.api_key) {
+    if (opts.json) {
+      console.log(JSON.stringify({ key: config.api_key, config: CONFIG_FILE }));
+      return;
+    }
+    console.log('');
+    console.log(`  \x1b[32m✓\x1b[0m already authenticated`);
+    console.log(`  key:     \x1b[1m${config.api_key}\x1b[0m`);
+    console.log(`  config:  ${CONFIG_FILE}`);
+    console.log('');
+    console.log(`  \x1b[2mrun "tf auth --new" to generate an additional key\x1b[0m`);
+    console.log('');
+    return;
+  }
+
+  // No key at all → generate one
+  await generateNewKey(opts);
+}
+
+async function generateNewKey(opts = {}) {
+  const config = loadConfig();
+  const apiBase = config.api_base || DEFAULT_API;
+
+  const res = await request(`${apiBase}/api/auth/key`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  }, JSON.stringify({ name: opts.name || 'cli' }));
+
+  if (res.status !== 200) {
+    console.error('  error: failed to generate key:', res.body?.error || res.status);
     process.exit(1);
   }
-  const config = loadConfig();
-  config.api_key = key;
+
+  const d = res.body;
+  config.api_key = d.key;
   saveConfig(config);
-  console.log(`  ✓ API key saved to ${CONFIG_FILE}`);
+
+  if (opts.json) {
+    console.log(JSON.stringify({ key: d.key, username: d.username, plan: d.plan }));
+    return;
+  }
+
+  console.log(`\n  \x1b[32m✓\x1b[0m new API key generated`);
+  console.log(`  key:      \x1b[1m${d.key}\x1b[0m`);
+  console.log(`  username: ${d.username}`);
+  console.log(`  plan:     ${d.plan}`);
+  console.log(`  saved to  ${CONFIG_FILE}`);
+  console.log('');
+}
+
+// ─── Keys command ───
+async function keys(opts) {
+  const config = loadConfig();
+  const apiKey = config.api_key;
+  const apiBase = config.api_base || DEFAULT_API;
+
+  if (!apiKey) {
+    console.error('  error: not authenticated. run: tf auth');
+    process.exit(1);
+  }
+
+  const res = await request(`${apiBase}/api/dashboard`, {
+    method: 'GET',
+    headers: { Authorization: 'Bearer ' + apiKey },
+  });
+
+  if (res.status !== 200) {
+    console.error('  error:', res.body?.error || res.status);
+    process.exit(1);
+  }
+
+  const apiKeys = res.body.api_keys || [];
+  if (apiKeys.length === 0) {
+    console.log('  no API keys found.');
+    return;
+  }
+
+  if (opts.json) {
+    console.log(JSON.stringify(apiKeys, null, 2));
+    return;
+  }
+
+  console.log('');
+  for (const k of apiKeys) {
+    const status = k.revoked ? '\x1b[31m✗ revoked\x1b[0m' : '\x1b[32m✓ active\x1b[0m ';
+    const current = k.token_preview.startsWith(apiKey.slice(0, 12)) ? ' \x1b[33m← current\x1b[0m' : '';
+    console.log(`  ${status}  ${k.token_preview}  ${k.name || ''}${current}`);
+    if (k.last_used_at) console.log(`           last used ${timeAgo(k.last_used_at)}`);
+  }
+  console.log('');
+}
+
+// ─── Whoami command ───
+async function whoami(opts) {
+  const config = loadConfig();
+  const apiKey = config.api_key;
+  const apiBase = config.api_base || DEFAULT_API;
+
+  if (!apiKey) {
+    console.log('  not authenticated — run: transfa auth');
+    return;
+  }
+
+  const res = await request(`${apiBase}/api/auth/validate`, {
+    method: 'GET',
+    headers: { Authorization: 'Bearer ' + apiKey },
+  });
+
+  if (res.status !== 200) {
+    console.error('  error: key invalid or expired — run: transfa auth');
+    process.exit(1);
+  }
+
+  const d = res.body;
+  if (opts.json) {
+    console.log(JSON.stringify(d));
+    return;
+  }
+
+  console.log('');
+  console.log(`  key:      ${apiKey.slice(0, 12)}${'•'.repeat(16)}${apiKey.slice(-4)}`);
+  if (d.username) console.log(`  username: ${d.username}`);
+  console.log(`  plan:     ${d.plan}`);
+  console.log(`  uploads:  ${d.uploads_today} / ${d.uploads_limit} today`);
+  console.log(`  config:   ${CONFIG_FILE}`);
+  console.log('');
 }
 
 // ─── List command ───
@@ -199,7 +354,7 @@ async function list(opts) {
   const apiBase = config.api_base || DEFAULT_API;
 
   if (!apiKey) {
-    console.error('  error: no API key set. run: transfa auth <key>');
+    console.error('  error: not authenticated. run: transfa auth');
     process.exit(1);
   }
 
@@ -215,7 +370,8 @@ async function list(opts) {
   }
 
   if (opts.json) {
-    console.log(JSON.stringify(res.body, null, 2));
+    const out = (res.body.uploads || []).map(u => ({ ...u, share_url: `${apiBase}/f/${u.id}`, download_url: `${apiBase}/api/download/${u.id}` }));
+    console.log(JSON.stringify(out, null, 2));
     return;
   }
 
@@ -232,15 +388,18 @@ async function list(opts) {
   for (const u of uploads) {
     const age = timeAgo(u.created_at);
     const exp = expiresIn(u.expires_at);
+    const name = (u.filename || u.original_filename || '').slice(0, 27);
+    const shareUrl = `${apiBase}/f/${u.id}`;
     const row = [
       u.id.padEnd(8),
-      u.filename.slice(0, 27).padEnd(28),
+      name.padEnd(28),
       formatBytes(u.size).padEnd(10),
       age.padEnd(8),
       exp.padEnd(10),
       String(u.download_count),
     ];
     console.log('  ' + row.join(' '));
+    if (opts.urls) console.log(`    \x1b[2m${shareUrl}\x1b[0m`);
   }
 }
 
@@ -251,7 +410,7 @@ async function rm(id) {
   const apiBase = config.api_base || DEFAULT_API;
 
   if (!apiKey) {
-    console.error('  error: no API key set. run: transfa auth <key>');
+    console.error('  error: not authenticated. run: transfa auth');
     process.exit(1);
   }
 
@@ -262,6 +421,108 @@ async function rm(id) {
 
   if (res.status === 200) {
     console.log(`  ✓ deleted ${id}`);
+  } else {
+    console.error('  error:', res.body?.error || res.status);
+    process.exit(1);
+  }
+}
+
+// ─── URL command ───
+async function getUrl(id, opts) {
+  const config = loadConfig();
+  const apiBase = config.api_base || DEFAULT_API;
+
+  if (opts.json) {
+    console.log(JSON.stringify({ id, share_url: `${apiBase}/f/${id}`, download_url: `${apiBase}/api/download/${id}` }));
+    return;
+  }
+
+  console.log('');
+  console.log(`\x1b[32m→ share\x1b[0m    ${apiBase}/f/${id}`);
+  console.log(`\x1b[2m→ download\x1b[0m ${apiBase}/api/download/${id}`);
+  console.log('');
+}
+
+// ─── Keygen command ───
+async function keygen(name, opts) {
+  const config = loadConfig();
+  const apiKey = config.api_key;
+  const apiBase = config.api_base || DEFAULT_API;
+
+  if (!apiKey) {
+    console.error('  error: not authenticated. run: tf auth');
+    process.exit(1);
+  }
+
+  const res = await request(`${apiBase}/api/dashboard/keys`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+  }, JSON.stringify({ name: name || 'cli key' }));
+
+  if (res.status !== 200 && res.status !== 201) {
+    console.error('  error:', res.body?.error || res.status);
+    process.exit(1);
+  }
+
+  const d = res.body;
+  if (opts.json) {
+    console.log(JSON.stringify({ id: d.id, key: d.key, name: d.name, scope: d.scope }));
+    return;
+  }
+
+  console.log(`\n  \x1b[32m✓\x1b[0m new API key generated`);
+  console.log(`  name: ${d.name}`);
+  console.log(`  key:  \x1b[1m${d.key}\x1b[0m`);
+  console.log(`\n  authenticate: tf auth ${d.key}`);
+  console.log('');
+}
+
+// ─── Revoke command ───
+async function revokeKey(keyId, opts) {
+  const config = loadConfig();
+  const apiKey = config.api_key;
+  const apiBase = config.api_base || DEFAULT_API;
+
+  if (!apiKey) {
+    console.error('  error: not authenticated. run: tf auth');
+    process.exit(1);
+  }
+
+  const res = await request(`${apiBase}/api/dashboard/keys/revoke`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+  }, JSON.stringify({ key_id: parseInt(keyId) }));
+
+  if (res.status !== 200) {
+    console.error('  error:', res.body?.error || res.status);
+    process.exit(1);
+  }
+
+  if (opts.json) {
+    console.log(JSON.stringify({ revoked: true, key_id: keyId }));
+    return;
+  }
+  console.log(`  \x1b[32m✓\x1b[0m key ${keyId} revoked`);
+}
+
+// ─── Username command ───
+async function setUsername(newName) {
+  const config = loadConfig();
+  const apiKey = config.api_key;
+  const apiBase = config.api_base || DEFAULT_API;
+
+  if (!apiKey) {
+    console.error('  error: not authenticated. run: tf auth');
+    process.exit(1);
+  }
+
+  const res = await request(`${apiBase}/api/dashboard/username`, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+  }, JSON.stringify({ username: newName }));
+
+  if (res.status === 200) {
+    console.log(`  \x1b[32m✓\x1b[0m username updated to: ${res.body.username}`);
   } else {
     console.error('  error:', res.body?.error || res.status);
     process.exit(1);
@@ -302,28 +563,36 @@ function expiresIn(isoStr) {
 // ─── Help ───
 function help() {
   console.log(`
-\x1b[32m■\x1b[0m transfa \x1b[2m— WeTransfer for agents\x1b[0m
+\x1b[32m■\x1b[0m tf \x1b[2m— file sharing for agents\x1b[0m
 
 \x1b[1mUsage:\x1b[0m
-  transfa upload <file>          upload a file and get a shareable link
-  transfa auth <api-key>         set your API key
-  transfa list                   list your uploads
-  transfa rm <id>                delete an upload
-  transfa config [key] [value]   view or set config
+  tf upload <file>          upload a file and get a shareable link
+  tf url <id>               print share + download URLs for an upload
+  tf list                   list your uploads (--urls to show links)
+  tf rm <id>                delete an upload
+  tf auth [api-key]         show current key, or generate/set one
+  tf whoami                 show current auth status and plan
+  tf keys                   list all API keys on your account
+  tf keygen [name]          generate a new API key
+  tf revoke <key-id>        revoke an API key by ID
+  tf username <new-name>    change your username
+  tf config [key] [value]   view or set config
 
 \x1b[1mUpload flags:\x1b[0m
   --expires=<dur>    TTL (e.g. 24h, 7d, 30d). Default: 7d
   --name=<str>       override filename shown to recipient
   --max=<n>          max download count
   --once             shortcut for --max=1
+  --password=<str>   password-protect the link
   --json             output machine-parseable JSON
-  --quiet            print URL and nothing else
+  --quiet            print URLs and nothing else
 
 \x1b[1mExamples:\x1b[0m
-  transfa upload dataset.parquet
-  transfa upload model.pt --expires=24h --json
-  transfa upload report.pdf --once --quiet
-  cat data.json | transfa upload - --name=output.json
+  tf auth                        # show current key or generate a free one
+  tf upload dataset.parquet
+  tf upload model.pt --expires=24h --json
+  tf upload report.pdf --once --quiet
+  cat data.json | tf upload - --name=output.json
 
 \x1b[2mConfig: ${CONFIG_FILE}\x1b[0m
 `);
@@ -360,12 +629,34 @@ switch (cmd) {
   }
   case 'auth': {
     const key = positional[0] || opts.key;
-    auth(key);
+    if (opts.new) {
+      generateNewKey(opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
+    } else {
+      auth(key, opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
+    }
+    break;
+  }
+  case 'whoami':
+  case 'me':
+  case 'status': {
+    whoami(opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
+    break;
+  }
+  case 'keys':
+  case 'key': {
+    keys(opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
     break;
   }
   case 'list':
   case 'ls': {
     list(opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
+    break;
+  }
+  case 'url':
+  case 'link': {
+    const id = positional[0];
+    if (!id) { console.error('  usage: tf url <id>'); process.exit(1); }
+    getUrl(id, opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
     break;
   }
   case 'rm':
@@ -374,6 +665,23 @@ switch (cmd) {
     const id = positional[0];
     if (!id) { console.error('  usage: transfa rm <id>'); process.exit(1); }
     rm(id).catch(e => { console.error('  error:', e.message); process.exit(1); });
+    break;
+  }
+  case 'keygen':
+  case 'newkey': {
+    keygen(positional[0], opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
+    break;
+  }
+  case 'revoke': {
+    const keyId = positional[0];
+    if (!keyId) { console.error('  usage: tf revoke <key-id>'); process.exit(1); }
+    revokeKey(keyId, opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
+    break;
+  }
+  case 'username': {
+    const newName = positional[0];
+    if (!newName) { console.error('  usage: tf username <new-name>'); process.exit(1); }
+    setUsername(newName).catch(e => { console.error('  error:', e.message); process.exit(1); });
     break;
   }
   case 'config': {

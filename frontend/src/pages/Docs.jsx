@@ -25,9 +25,10 @@ function H3({ id, children }) {
 
 function FlagTable({ title, rows }) {
   return (
-    <div style={{ marginTop: 20, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-      <div style={{ background: 'var(--bg-1)', padding: '12px 18px', fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)', borderBottom: '1px solid var(--border)' }}>{title}</div>
-      <table className="table" style={{ background: 'var(--bg)' }}>
+    <div className="docs-flag-table" style={{ marginTop: 20 }}>
+      <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', minWidth: 400 }}>
+        <div style={{ background: 'var(--bg-1)', padding: '12px 18px', fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)', borderBottom: '1px solid var(--border)' }}>{title}</div>
+        <table className="table" style={{ background: 'var(--bg)' }}>
         <thead>
           <tr><th style={{ width: 200 }}>Flag</th><th>Description</th><th style={{ width: 80 }}>Default</th></tr>
         </thead>
@@ -42,6 +43,7 @@ function FlagTable({ title, rows }) {
         </tbody>
       </table>
     </div>
+    </div>
   );
 }
 
@@ -55,7 +57,8 @@ function RateTable() {
     ['MCP tool calls / min', '—', '120', '600'],
   ];
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', marginTop: 20 }}>
+    <div className="docs-flag-table" style={{ marginTop: 20 }}>
+    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', minWidth: 400 }}>
       <table className="compare-table">
         <thead>
           <tr>
@@ -76,6 +79,7 @@ function RateTable() {
           ))}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }
@@ -152,9 +156,9 @@ export default function Docs() {
 
           <article>
             <H2 id="installation" eyebrow="01 · install">Installation</H2>
-            <P>The fastest path is the install script. It downloads the correct binary for your platform, verifies the signature, and drops it into <Mono>/usr/local/bin/tf</Mono>.</P>
-            <CodeWindow title="install" copy="curl -fsSL transfa.sh/install | sh" lang="bash">
-              <Sh><span className="tok-cmd">curl</span> <span className="tok-flag">-fsSL</span> transfa.sh/install | sh</Sh>
+            <P>The fastest path is the install script. It installs the CLI globally via npm and drops the <Mono>tf</Mono> command into your PATH.</P>
+            <CodeWindow title="install" copy="curl -fsSL https://transfa.sh/install | sh" lang="bash">
+              <Sh><span className="tok-cmd">curl</span> <span className="tok-flag">-fsSL</span> https://transfa.sh/install | sh</Sh>
             </CodeWindow>
 
             <H3 id="package-managers">Package managers</H3>
@@ -169,10 +173,13 @@ export default function Docs() {
             </CodeWindow>
 
             <H2 id="quickstart" eyebrow="02 · quickstart">Quick start</H2>
-            <P>After install, authenticate the CLI with a personal access token from your dashboard.</P>
-            <CodeWindow title="auth" lang="bash">
-              <Sh><span className="tok-cmd">transfa</span> auth <span className="tok-str">tf_live_••••••••••••••••</span></Sh>{'\n'}
-              <span className="tok-out">  ✓ API key saved to ~/.transfa/config.json</span>
+            <P>After install, run <Mono>tf auth</Mono> to get a free API key instantly — no browser or sign-up required.</P>
+            <CodeWindow title="auth" copy="tf auth" lang="bash">
+              <Sh><span className="tok-cmd">tf</span> auth</Sh>{'\n'}
+              <span className="tok-out">  ✓ new API key generated</span>{'\n'}
+              <span className="tok-out">  key:  tf_live_••••••••••••••••</span>{'\n'}
+              <span className="tok-out">  plan: free</span>{'\n'}
+              <span className="tok-out">  saved to ~/.transfa/config.json</span>
             </CodeWindow>
 
             <P style={{ marginTop: 24 }}>Send a file. The default TTL is 7 days. The link is copied to your clipboard.</P>
@@ -211,15 +218,13 @@ export default function Docs() {
             </CodeWindow>
 
             <H2 id="api-auth" eyebrow="04 · API">API reference</H2>
-            <P>All endpoints live under <Mono>https://api.transfa.sh/v1</Mono>. Authenticate with a bearer token.</P>
+            <P>All endpoints live under <Mono>https://transfa.sh/api</Mono>. Authenticate with a bearer token.</P>
 
-            <CodeWindow title="curl" copy='curl -H "Authorization: Bearer tf_live_•••" https://api.transfa.sh/v1/uploads' lang="bash">
-              <Sh><span className="tok-cmd">curl</span> <span className="tok-flag">-X</span> POST https://api.transfa.sh/v1/uploads \</Sh>{'\n'}
+            <CodeWindow title="curl" copy='curl -X POST https://transfa.sh/api/upload -H "Authorization: Bearer tf_live_•••" -F "file=@report.pdf" -F "ttl=7d"' lang="bash">
+              <Sh><span className="tok-cmd">curl</span> <span className="tok-flag">-X</span> POST https://transfa.sh/api/upload \</Sh>{'\n'}
               <span className="tok-out">    </span><span className="tok-flag">-H</span> <span className="tok-str">"Authorization: Bearer tf_live_•••"</span> \{'\n'}
-              <span className="tok-out">    </span><span className="tok-flag">-H</span> <span className="tok-str">"Content-Type: application/octet-stream"</span> \{'\n'}
-              <span className="tok-out">    </span><span className="tok-flag">-H</span> <span className="tok-str">"X-Transfa-Filename: report.pdf"</span> \{'\n'}
-              <span className="tok-out">    </span><span className="tok-flag">-H</span> <span className="tok-str">"X-Transfa-TTL: 86400"</span> \{'\n'}
-              <span className="tok-out">    </span><span className="tok-flag">--data-binary</span> @report.pdf
+              <span className="tok-out">    </span><span className="tok-flag">-F</span> <span className="tok-str">"file=@report.pdf"</span> \{'\n'}
+              <span className="tok-out">    </span><span className="tok-flag">-F</span> <span className="tok-str">"ttl=7d"</span>
             </CodeWindow>
 
             <H3 id="api-upload">Response · 201 Created</H3>

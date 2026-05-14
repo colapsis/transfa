@@ -144,6 +144,7 @@ button { font-family: inherit; cursor: pointer; }
 .tok-flag { color: #c1c1c1; }
 .tok-dim { color: var(--text-3); }
 .tok-out { color: var(--text-2); }
+.tok-ok  { color: var(--ok); }
 .tok-prompt { color: var(--text-3); user-select: none; }
 
 .copy-btn {
@@ -237,7 +238,8 @@ button { font-family: inherit; cursor: pointer; }
 .sidebar-link.active { color: var(--text); background: var(--bg-2); border-left-color: var(--accent); padding-left: 14px; }
 
 /* ─────────────  Pricing  ───────────── */
-.price-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.price-grid-4 { grid-template-columns: repeat(4, 1fr); }
 .price-card {
   background: var(--bg-1); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 28px; display: flex; flex-direction: column;
@@ -313,10 +315,120 @@ button { font-family: inherit; cursor: pointer; }
 .meta-k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 4px; }
 .meta-v { font-size: 14px; color: var(--text); font-family: var(--mono); }
 
-/* responsive */
+/* ── Logos carousel ─────────────────────────────────────────────── */
+.logos-section {
+  padding: 56px 0 60px;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.logos-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  text-align: center;
+  margin: 0 0 36px;
+}
+
+.logos-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+  /* pause all tracks when hovering anywhere on the stage */
+}
+.logos-stage:hover .logos-track { animation-play-state: paused; }
+
+/* gradient edge masks */
+.logos-fade {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 220px;
+  z-index: 2;
+  pointer-events: none;
+}
+.logos-fade-l { left: 0;  background: linear-gradient(to right, var(--bg) 0%, transparent 100%); }
+.logos-fade-r { right: 0; background: linear-gradient(to left,  var(--bg) 0%, transparent 100%); }
+
+/* scrolling tracks */
+.logos-track {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+}
+.logos-track-fwd { animation: logos-fwd 38s linear infinite; }
+.logos-track-rev { animation: logos-rev 44s linear infinite; }
+
+@keyframes logos-fwd {
+  from { transform: translateX(0); }
+  to   { transform: translateX(calc(-100% / 3)); }
+}
+@keyframes logos-rev {
+  from { transform: translateX(calc(-100% / 3)); }
+  to   { transform: translateX(0); }
+}
+
+/* individual chips */
+.logos-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 36px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+  color: var(--text-3);
+  white-space: nowrap;
+  transition: color 0.25s;
+  cursor: default;
+}
+.logos-chip:hover { color: var(--text); }
+
+.logos-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-4);
+  flex-shrink: 0;
+  transition: background 0.25s;
+}
+.logos-chip:hover .logos-dot { background: var(--accent); }
+
+/* ─────────────  Scrollable table wrappers  ───────────── */
+.docs-flag-table { border-radius: 8px; }
+
+/* ─── hamburger ─── */
+.nav-hamburger {
+  display: none;
+  background: none; border: none; cursor: pointer;
+  color: var(--text); padding: 4px; line-height: 1;
+}
+.nav-mobile-drawer {
+  display: none;
+}
+
+/* ─── responsive: tablet 900px ─── */
 @media (max-width: 900px) {
   .nav-links { display: none; }
-  .price-grid { grid-template-columns: 1fr; }
+  .nav-cta  { display: none; }
+  .nav-hamburger { display: flex; align-items: center; }
+  .nav-mobile-drawer {
+    display: flex; flex-direction: column; gap: 4px;
+    position: fixed; top: 57px; left: 0; right: 0; bottom: 0;
+    background: var(--bg); z-index: 999;
+    padding: 16px 20px; overflow-y: auto;
+    border-top: 1px solid var(--border);
+  }
+  .nav-mobile-drawer .nav-link {
+    padding: 12px 8px; font-size: 16px; border-radius: 6px;
+  }
+  .price-grid { grid-template-columns: 1fr 1fr; }
+  .price-grid-4 { grid-template-columns: 1fr 1fr; }
   .stat-row { grid-template-columns: 1fr 1fr; }
   .layout-sidebar { grid-template-columns: 1fr; }
   .sidebar { position: static; }
@@ -324,4 +436,99 @@ button { font-family: inherit; cursor: pointer; }
   .dash-side { border-right: 0; border-bottom: 1px solid var(--border); }
   .dash-main { padding: 24px; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ─── responsive: mobile 640px ─── */
+@media (max-width: 640px) {
+  /* layout */
+  .container { padding: 0 16px; }
+  .container-narrow { padding: 0 16px; }
+  .nav-inner { padding: 0 16px; }
+
+  /* prevent horizontal overflow at page level */
+  html, body { overflow-x: hidden; max-width: 100vw; }
+  .page { overflow-x: hidden; }
+
+  /* section padding — apply to all sections with inline padding */
+  .hero-section { padding: 64px 16px 48px !important; }
+  .section-pad { padding: 64px 16px !important; }
+
+  /* hero grid → single column; min-width:0 lets grid items shrink past their content width */
+  .hero-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+  .hero-grid > * { min-width: 0; }
+
+  /* code windows must not overflow their container */
+  .code-window { max-width: 100%; overflow: hidden; }
+  .code-body { font-size: 12px; }
+  .code { font-size: 12px; overflow-x: auto; }
+
+  /* landing grids */
+  .how-grid { grid-template-columns: 1fr !important; }
+  .how-grid > * { min-width: 0; }
+  .for-agents-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
+  .for-agents-grid > * { min-width: 0; }
+  .for-agents-sticky { position: static !important; }
+  .features-grid { grid-template-columns: 1fr !important; }
+  .mini-stats { grid-template-columns: 1fr 1fr !important; }
+
+  /* inline-style section paddings on Landing sections without section-pad class */
+  section { padding-left: 20px !important; padding-right: 20px !important; }
+
+  /* pricing */
+  .price-grid { grid-template-columns: 1fr; }
+  .price-grid-4 { grid-template-columns: 1fr; }
+  .price-card { min-height: unset; }
+  .compare-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .compare-table th, .compare-table td { padding: 10px 12px; font-size: 12px; }
+
+  /* dashboard */
+  .dash-main { padding: 16px; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .settings-row { grid-template-columns: 1fr !important; gap: 8px !important; }
+  .stat-row { grid-template-columns: 1fr !important; }
+
+  /* billing tab */
+  .billing-cards { grid-template-columns: 1fr !important; }
+  .billing-compare { grid-template-columns: 1fr !important; }
+
+  /* contact response times */
+  .response-grid { grid-template-columns: 1fr !important; }
+
+  /* docs flag/rate tables */
+  .docs-flag-table { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+
+  /* docs sidebar + layout */
+  .layout-sidebar { padding: 0 !important; gap: 0 !important; }
+  .sidebar {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 8px 16px !important;
+    border-bottom: 1px solid var(--border);
+    gap: 2px;
+    margin-bottom: 0;
+    position: static !important;
+  }
+  .sidebar::-webkit-scrollbar { display: none; }
+  .sidebar-group { display: contents !important; }
+  .sidebar-title { display: none !important; }
+  .sidebar-link { white-space: nowrap !important; flex-shrink: 0; font-size: 12px !important; padding: 5px 10px !important; }
+  .layout-sidebar > main { padding: 24px 16px 48px !important; min-width: 0; overflow-x: hidden; }
+
+  /* code windows: allow inner scroll rather than clipping */
+  .code-window { overflow: visible !important; max-width: 100%; }
+  .code-body { overflow-x: auto; max-width: 100%; }
+
+  /* footer */
+  .footer-grid { grid-template-columns: 1fr; }
+  .footer { padding: 48px 16px 24px; }
+  .footer-bottom { flex-direction: column; gap: 8px; text-align: center; }
+
+  /* headings */
+  .h1 { font-size: clamp(36px, 11vw, 80px) !important; }
+  .h2 { font-size: clamp(26px, 7vw, 48px) !important; }
+
 }

@@ -91,6 +91,7 @@ router.post('/checkout', requireKey, async (req, res) => {
     success_url: `${baseUrl}/dashboard?upgrade=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/pricing?upgrade=cancelled`,
     subscription_data: {
+      trial_period_days: 3,
       metadata: { user_id: String(user.user_id), username: user.username, plan, interval },
     },
     allow_promotion_codes: true,

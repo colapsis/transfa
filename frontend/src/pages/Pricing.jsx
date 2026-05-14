@@ -28,7 +28,7 @@ export default function Pricing() {
     <div className="page">
       <Seo
         title="Pricing"
-        description="Flat plans for individuals and teams. Free forever, Pro at $12/mo, Team at $48/mo. No seats, no egress surprises. 14-day trial on paid plans."
+        description="Flat plans for individuals and teams. Free forever, Pro at $12/mo, Team at $48/mo. No seats, no egress surprises. 3-day trial on paid plans."
         canonical="/pricing"
         ogType="website"
         jsonLd={PRICING_JSON_LD}
@@ -63,14 +63,23 @@ export default function Pricing() {
 
       <section style={{ padding: '64px 32px', borderBottom: '1px solid var(--border)' }}>
         <div className="container">
-          <div className="price-grid">
+          <div className="price-grid price-grid-4">
+            <PriceCard
+              name="guest"
+              price="$0"
+              sub="no signup"
+              desc="Drop a file, get a link. No key, no account, no commitment."
+              features={['10 MB max upload', '24h link expiry', '5 uploads / day', 'Public links only', 'Auto-generated key saved locally']}
+              cta="Upload now"
+              ctaTo="/docs"
+            />
             <PriceCard
               name="free"
               price="$0"
               sub="forever"
               desc="For tinkering, prototypes, and one-off agent scripts."
-              features={['2 GB max upload', 'Up to 7-day expiry', '10 uploads / day · 30 req/min', 'Public links only', 'Community Discord', 'Single user, single device']}
-              cta="Start free"
+              features={['500 MB max upload', 'Up to 48h expiry', '20 uploads / day', 'Public links only', 'Community Discord']}
+              cta="Get free key"
               ctaTo="/dashboard"
             />
             <PriceCard
@@ -79,8 +88,8 @@ export default function Pricing() {
               sub="/ month per user"
               desc="For developers and agents shipping in production."
               featured
-              features={['50 GB max upload', 'Up to 30-day expiry', 'Unlimited uploads · 600 req/min', 'Password-protected links', 'Custom expiry & one-time links', 'MCP server + Python/Node SDKs', 'Audit log (last 30 days)', 'Priority email support']}
-              cta="Start 14-day trial"
+              features={['50 GB max upload', 'Up to 30-day expiry', 'Unlimited storage · 600 req/min', 'Password-protected links', 'Custom expiry & one-time links', 'MCP server + Python/Node SDKs', 'Audit log (last 30 days)', 'Priority email support']}
+              cta="Start 3-day trial"
               ctaTo="/dashboard"
             />
             <PriceCard
@@ -89,7 +98,7 @@ export default function Pricing() {
               sub="/ month per user"
               desc="For agent fleets and engineering orgs."
               features={['100 GB max upload', 'Up to 180-day expiry', '3,000 req/min · 25 concurrent', 'SAML SSO + SCIM', 'Audit log streaming (SIEM)', 'DPA + BAA available', 'Self-host (Helm + Docker)', 'Slack-channel support']}
-              cta="Start 14-day trial"
+              cta="Start 3-day trial"
               ctaTo="/dashboard"
             />
           </div>
@@ -99,7 +108,7 @@ export default function Pricing() {
               <div style={{ fontFamily: 'var(--mono)', color: 'var(--accent)', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}>enterprise</div>
               <div style={{ fontSize: 16, marginTop: 4 }}>Custom volume, custom region, FedRAMP-track. <span className="muted">For more than 50 users or compliance needs.</span></div>
             </div>
-            <a className="btn btn-secondary" href="#">Talk to founders <ArrowIcon /></a>
+            <a className="btn btn-secondary" href="https://t.me/henloki" target="_blank" rel="noreferrer">Talk to founders <ArrowIcon /></a>
           </div>
         </div>
       </section>
@@ -114,11 +123,12 @@ export default function Pricing() {
             <div className="mono muted-2" style={{ fontSize: 12 }}>* limits are per workspace</div>
           </div>
 
-          <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--bg-1)' }}>
-            <table className="compare-table">
+          <div className="compare-wrap" style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--bg-1)' }}>
+            <table className="compare-table" style={{ minWidth: 540 }}>
               <thead>
                 <tr>
-                  <th style={{ width: '32%' }}>Plan</th>
+                  <th style={{ width: '28%' }}>Plan</th>
+                  <th>Guest</th>
                   <th>Free</th>
                   <th style={{ color: 'var(--accent)' }}>Pro</th>
                   <th>Team</th>
@@ -126,41 +136,41 @@ export default function Pricing() {
               </thead>
               <tbody>
                 <RowGroup label="Limits" />
-                <Row k="Max upload size" v={['2 GB', '50 GB', '100 GB']} />
-                <Row k="Max TTL" v={['7 days', '30 days', '180 days']} />
-                <Row k="Uploads / month" v={['300', 'Unlimited', 'Unlimited']} />
-                <Row k="Bandwidth (egress) / mo" v={['20 GB', '2 TB', '10 TB']} />
-                <Row k="API requests / min" v={['30', '600', '3,000']} />
-                <Row k="Concurrent uploads" v={['1', '5', '25']} />
+                <Row k="Max upload size" v={['10 MB', '500 MB', '50 GB', '100 GB']} />
+                <Row k="Max TTL" v={['24h', '48h', '30 days', '180 days']} />
+                <Row k="Uploads / month" v={['5/day', '300', 'Unlimited', 'Unlimited']} />
+                <Row k="Bandwidth (egress) / mo" v={['—', '20 GB', '2 TB', '10 TB']} />
+                <Row k="API requests / min" v={['—', '30', '600', '3,000']} />
+                <Row k="Concurrent uploads" v={['1', '1', '5', '25']} />
 
                 <RowGroup label="Links" />
-                <Row k="Public signed links" v={[true, true, true]} />
-                <Row k="Password protection" v={[false, true, true]} />
-                <Row k="One-time links" v={[false, true, true]} />
-                <Row k="Custom domain (xfer.you.dev)" v={[false, false, true]} />
-                <Row k="Branded download page" v={[false, false, true]} />
+                <Row k="Public signed links" v={[true, true, true, true]} />
+                <Row k="Password protection" v={[false, false, true, true]} />
+                <Row k="One-time links" v={[false, false, true, true]} />
+                <Row k="Custom domain (xfer.you.dev)" v={[false, false, false, true]} />
+                <Row k="Branded download page" v={[false, false, false, true]} />
 
                 <RowGroup label="For agents" />
-                <Row k="MCP server" v={[false, true, true]} />
-                <Row k="Python · Node · Go SDK" v={[true, true, true]} />
-                <Row k="JSON output mode" v={[true, true, true]} />
-                <Row k="Idempotency keys" v={[true, true, true]} />
-                <Row k="Webhooks" v={[false, true, true]} />
+                <Row k="MCP server" v={[false, false, true, true]} />
+                <Row k="Python · Node · Go SDK" v={[false, true, true, true]} />
+                <Row k="JSON output mode" v={[true, true, true, true]} />
+                <Row k="Idempotency keys" v={[true, true, true, true]} />
+                <Row k="Webhooks" v={[false, false, true, true]} />
 
                 <RowGroup label="Security & compliance" />
-                <Row k="Client-side age encryption" v={[true, true, true]} />
-                <Row k="ClamAV virus scanning" v={[true, true, true]} />
-                <Row k="Audit log retention" v={['—', '30 days', '1 year']} />
-                <Row k="SIEM stream (Datadog, Splunk)" v={[false, false, true]} />
-                <Row k="SAML SSO + SCIM" v={[false, false, true]} />
-                <Row k="DPA · BAA · SOC 2 report" v={[false, false, true]} />
-                <Row k="Self-host (Helm + Docker)" v={[false, false, true]} />
+                <Row k="Client-side age encryption" v={[false, true, true, true]} />
+                <Row k="ClamAV virus scanning" v={[false, true, true, true]} />
+                <Row k="Audit log retention" v={['—', '—', '30 days', '1 year']} />
+                <Row k="SIEM stream (Datadog, Splunk)" v={[false, false, false, true]} />
+                <Row k="SAML SSO + SCIM" v={[false, false, false, true]} />
+                <Row k="DPA · BAA · SOC 2 report" v={[false, false, false, true]} />
+                <Row k="Self-host (Helm + Docker)" v={[false, false, false, true]} />
 
                 <RowGroup label="Support" />
-                <Row k="Community Discord" v={[true, true, true]} />
-                <Row k="Email support · 24h" v={[false, true, true]} />
-                <Row k="Shared Slack channel" v={[false, false, true]} />
-                <Row k="SLA · 99.9% uptime" v={[false, false, true]} />
+                <Row k="Community Discord" v={[false, true, true, true]} />
+                <Row k="Email support · 24h" v={[false, false, true, true]} />
+                <Row k="Shared Slack channel" v={[false, false, false, true]} />
+                <Row k="SLA · 99.9% uptime" v={[false, false, false, true]} />
               </tbody>
             </table>
           </div>
@@ -234,15 +244,16 @@ function PriceCard({ name, price, sub, desc, featured, features, cta, ctaTo, onU
 }
 
 function RowGroup({ label }) {
-  return <tr><td className="row-header" colSpan={4}>{label}</td></tr>;
+  return <tr><td className="row-header" colSpan={5}>{label}</td></tr>;
 }
 
 function Row({ k, v }) {
+  // v = [guest, free, pro, team]
   return (
     <tr>
       <th>{k}</th>
       {v.map((cell, i) => (
-        <td key={i} className="center mono" style={{ color: i === 1 ? 'var(--accent)' : 'var(--text-2)' }}>
+        <td key={i} className="center mono" style={{ color: i === 2 ? 'var(--accent)' : 'var(--text-2)' }}>
           {cell === true ? <span className="check">✓</span> : cell === false ? <span className="dash">—</span> : cell}
         </td>
       ))}

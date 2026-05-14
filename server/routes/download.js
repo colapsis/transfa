@@ -40,24 +40,27 @@ router.get('/:id', (req, res) => {
     return res.status(404).json({ error: 'file not found on storage' });
   }
 
-  // Log the download
-  db.prepare(
-    'INSERT INTO download_log (upload_id, ip, user_agent) VALUES (?, ?, ?)'
-  ).run(upload.id, req.ip, req.headers['user-agent'] || null);
+  const filename = upload.original_filename.replace(/[\r\n"\\]/g, '_');
+  const mimeType = (upload.mime_type || 'application/octet-stream').replace(/[\r\n]/g, '');
 
-  db.prepare('UPDATE uploads SET download_count = download_count + 1 WHERE id = ?').run(upload.id);
-
-  const filename = upload.original_filename;
-  const mimeType = upload.mime_type || 'application/octet-stream';
-
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
   res.setHeader('Content-Type', mimeType);
   res.setHeader('Content-Length', upload.size);
   res.setHeader('X-Transfa-SHA256', upload.sha256 || '');
   res.setHeader('X-Transfa-Expires', new Date(upload.expires_at * 1000).toISOString());
 
+  // Start streaming immediately, then log — avoids blocking stream start on DB writes
   const stream = fs.createReadStream(upload.storage_path);
   stream.pipe(res);
+
+  setImmediate(() => {
+    try {
+      db.prepare('INSERT INTO download_log (upload_id, ip, user_agent) VALUES (?, ?, ?)').run(upload.id, req.ip, req.headers['user-agent'] || null);
+      db.prepare('UPDATE uploads SET download_count = download_count + 1 WHERE id = ?').run(upload.id);
+    } catch (e) {
+      console.error('[download] log error:', e.message);
+    }
+  });
 });
 
 // GET /api/download/verify/:id?password=xxx — check password without downloading

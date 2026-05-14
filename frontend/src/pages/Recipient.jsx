@@ -108,7 +108,7 @@ export default function Recipient() {
       <div className="recipient-shell">
         <div style={{ width: '100%', maxWidth: 540 }}>
           <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center', marginBottom: 18 }}>
-            <span style={{ color: 'var(--text-4)' }}>→</span> transfa.sh/<span style={{ color: 'var(--accent)' }}>{id}</span>
+            <span style={{ color: 'var(--text-4)' }}>→</span> transfa.sh/f/<span style={{ color: 'var(--accent)' }}>{id}</span>
           </div>
           <div className="file-card" style={{ textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 32, color: 'var(--text-3)', marginBottom: 16 }}>410</div>
@@ -147,7 +147,7 @@ export default function Recipient() {
       />
       <div style={{ width: '100%', maxWidth: 540 }}>
         <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center', marginBottom: 18, letterSpacing: '0.04em' }}>
-          <span style={{ color: 'var(--text-4)' }}>→</span> transfa.sh/<span style={{ color: 'var(--accent)' }}>{id}</span>
+          <span style={{ color: 'var(--text-4)' }}>→</span> transfa.sh/f/<span style={{ color: 'var(--accent)' }}>{id}</span>
         </div>
 
         <div className="file-card">

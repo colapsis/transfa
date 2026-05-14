@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" width="320" height="64">
+  <rect width="320" height="64" fill="#e8ff47"></rect>
+  <rect x="16" y="26" width="12" height="12" fill="#050505"></rect>
+  <text x="40" y="42" font-family="&#39;Space Mono&#39;, ui-monospace, Menlo, monospace" font-weight="700" font-size="26" fill="#050505" letter-spacing="-0.5">transfa<tspan fill="rgba(0,0,0,0.4)">.</tspan><tspan fill="#050505">sh</tspan></text>
+</svg>

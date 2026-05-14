@@ -14,9 +14,29 @@ export default function CodeWindow({ title = '~/projects', children, copy, lang 
 
   function doCopy() {
     if (!copy) return;
-    navigator.clipboard?.writeText(copy);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(copy).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      }).catch(() => execCopy());
+    } else {
+      execCopy();
+    }
+  }
+
+  function execCopy() {
+    const el = document.createElement('textarea');
+    el.value = copy;
+    el.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(el);
+    el.focus();
+    el.select();
+    try {
+      document.execCommand('copy');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {}
+    document.body.removeChild(el);
   }
 
   return (

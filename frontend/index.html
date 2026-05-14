@@ -15,7 +15,9 @@
 
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="shortcut icon" href="/favicon.svg" />
+  <link rel="icon" href="/brand/favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="icon" href="/brand/favicon-16.png" sizes="16x16" type="image/png" />
+  <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
 
   <!-- Open Graph defaults (overridden per-page by Helmet) -->
   <meta property="og:site_name" content="transfa.sh" />
@@ -28,6 +30,15 @@
   <!-- Twitter defaults -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://transfa.sh/og-image.png" />
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-JNV6P596VH"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-JNV6P596VH');
+  </script>
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />

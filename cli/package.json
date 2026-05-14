@@ -1,6 +1,6 @@
 {
   "name": "transfa",
-  "version": "1.4.2",
+  "version": "1.6.0",
   "description": "WeTransfer for agents. Dead-simple file sharing CLI for AI agents and developers.",
   "main": "index.js",
   "bin": {

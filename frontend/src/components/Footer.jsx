@@ -32,10 +32,10 @@ export default function Footer() {
         </div>
         <div className="footer-col">
           <h4>Company</h4>
-          <a href="#">Manifesto</a>
+          <Link to="/contact">Contact</Link>
           <a href="#">Changelog</a>
           <a href="#">Status</a>
-          <a href="#">Security</a>
+          <a href="https://github.com/colapsis/transfa/blob/main/SECURITY.md" target="_blank" rel="noreferrer">Security</a>
         </div>
         <div className="footer-col">
           <h4>Legal</h4>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import Seo from '../components/Seo.jsx';
 
@@ -66,6 +67,8 @@ export default function Dashboard() {
     const p = new URLSearchParams(window.location.search);
     return p.get('upgrade') === 'success';
   });
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [loadCounter, setLoadCounter] = useState(0);
 
   useEffect(() => {
     if (!apiKey) return;
@@ -81,7 +84,7 @@ export default function Dashboard() {
       })
       .catch(() => { setError('connection failed'); setApiKey(''); localStorage.removeItem(API_KEY_STORAGE); })
       .finally(() => setLoading(false));
-  }, [apiKey]);
+  }, [apiKey, loadCounter]);
 
   function handleKeySubmit(e) {
     e.preventDefault();
@@ -295,7 +298,7 @@ export default function Dashboard() {
             {tab === 'uploads' && (
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn btn-secondary btn-sm">Export CSV</button>
-                <button className="btn btn-primary btn-sm">+ New upload</button>
+                <button className="btn btn-primary btn-sm" onClick={() => setShowUploadModal(true)}>+ New upload</button>
               </div>
             )}
           </div>
@@ -336,37 +339,103 @@ export default function Dashboard() {
           {tab === 'uploads' && <UploadsTab uploads={uploads} apiKey={apiKey} />}
           {tab === 'keys' && <KeysTab apiKeys={apiKeys} apiKey={apiKey} currentKey={apiKey} />}
           {tab === 'billing' && <BillingTab plan={user.plan} apiKey={apiKey} />}
-          {tab === 'settings' && <SettingsTab user={user} />}
+          {tab === 'settings' && <SettingsTab user={user} apiKey={apiKey} />}
+          {tab === 'audit' && <AuditTab apiKey={apiKey} />}
+          {tab === 'webhooks' && <WebhooksTab plan={user.plan} />}
+          {tab === 'team' && <TeamTab plan={user.plan} user={user} />}
+          {tab === 'mcp' && <McpTab apiKey={apiKey} currentKey={apiKey} />}
         </main>
       </div>
+      {showUploadModal && (
+        <UploadModal
+          apiKey={apiKey}
+          plan={user.plan}
+          stats={stats}
+          onClose={() => setShowUploadModal(false)}
+          onSuccess={() => { setShowUploadModal(false); setLoadCounter(c => c + 1); }}
+        />
+      )}
     </div>
   );
 }
 
-function UploadsTab({ uploads, apiKey }) {
+function UploadsTab({ uploads: initialUploads, apiKey }) {
+  const [uploads, setUploads] = useState(initialUploads);
+  const [openMenu, setOpenMenu] = useState(null);
+  const [menuPos, setMenuPos] = useState(null);
+  const [copied, setCopied] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (!e.target.closest('.row-menu-btn')) { setOpenMenu(null); setMenuPos(null); }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  function toggleMenu(id, e) {
+    if (openMenu === id) { setOpenMenu(null); setMenuPos(null); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < 160;
+    setMenuPos(openUp
+      ? { bottom: window.innerHeight - rect.top + 4, right: window.innerWidth - rect.right }
+      : { top: rect.bottom + 4, right: window.innerWidth - rect.right }
+    );
+    setOpenMenu(id);
+  }
+
+  function copyLink(id) {
+    const url = `${window.location.origin}/f/${id}`;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).catch(() => execCopyText(url));
+    } else {
+      execCopyText(url);
+    }
+    setCopied(id);
+    setTimeout(() => setCopied(null), 1500);
+    setOpenMenu(null);
+  }
+
+  function execCopyText(text) {
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+  }
+
+  async function deleteUpload(id) {
+    setDeleting(id);
+    setOpenMenu(null);
+    try {
+      const res = await fetch(`/api/upload/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + apiKey },
+      });
+      if (res.ok) setUploads(prev => prev.filter(u => u.id !== id));
+    } catch {}
+    setDeleting(null);
+  }
+
   return (
     <div>
       <div className="section-h">
         <h2>Recent uploads</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            placeholder="filter by name, id…"
-            style={{ width: 260, background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 4, padding: '6px 10px', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--mono)', outline: 'none' }}
-          />
-          <button className="btn btn-secondary btn-sm">Filter</button>
-        </div>
       </div>
 
       {uploads.length === 0 ? (
         <div style={{ padding: '64px 32px', textAlign: 'center', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-3)', fontFamily: 'var(--mono)', fontSize: 13 }}>
-          no uploads yet — run <span style={{ color: 'var(--accent)' }}>transfa upload &lt;file&gt;</span>
+          no uploads yet — run <span style={{ color: 'var(--accent)' }}>tf upload &lt;file&gt;</span>
         </div>
       ) : (
-        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-1)' }}>
-          <table className="table">
+        <div className="table-wrap" style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-1)' }}>
+          <table className="table" style={{ minWidth: 600 }}>
             <thead>
               <tr>
-                <th style={{ width: 36 }}><input type="checkbox" /></th>
                 <th>File</th>
                 <th style={{ width: 80 }}>Size</th>
                 <th>Link</th>
@@ -380,9 +449,9 @@ function UploadsTab({ uploads, apiKey }) {
               {uploads.map(u => {
                 const { label, status } = expiryLabel(u.expires_at);
                 const pillClass = status === 'live' ? 'pill-ok' : status === 'warn' ? 'pill-warn' : 'pill-dead';
+                const shareUrl = `${window.location.origin}/f/${u.id}`;
                 return (
-                  <tr key={u.id}>
-                    <td><input type="checkbox" /></td>
+                  <tr key={u.id} style={{ opacity: deleting === u.id ? 0.4 : 1, transition: 'opacity .2s' }}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <FileTypeBadge filename={u.filename} />
@@ -394,9 +463,18 @@ function UploadsTab({ uploads, apiKey }) {
                     </td>
                     <td className="mono">{formatBytes(u.size)}</td>
                     <td className="mono">
-                      <Link style={{ color: 'var(--accent)' }} to={'/f/' + u.id}>
-                        transfa.sh/{u.id}
-                      </Link>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Link style={{ color: 'var(--accent)' }} to={'/f/' + u.id}>
+                          transfa.sh/f/{u.id}
+                        </Link>
+                        <button
+                          className={'copy-btn' + (copied === u.id ? ' copied' : '')}
+                          onClick={() => copyLink(u.id)}
+                          style={{ fontSize: 10, padding: '2px 6px', flexShrink: 0 }}
+                        >
+                          {copied === u.id ? '✓' : 'copy'}
+                        </button>
+                      </div>
                     </td>
                     <td>
                       <span className={'pill ' + pillClass}>
@@ -406,22 +484,69 @@ function UploadsTab({ uploads, apiKey }) {
                     <td className="mono muted">{timeAgo(u.created_at)}</td>
                     <td className="mono">{u.download_count}</td>
                     <td>
-                      <button className="btn btn-ghost btn-sm" style={{ padding: 4 }}>•••</button>
+                      <button
+                        className="btn btn-ghost btn-sm row-menu-btn"
+                        style={{ padding: '2px 8px', fontSize: 16, lineHeight: 1 }}
+                        onClick={e => toggleMenu(u.id, e)}
+                      >
+                        •••
+                      </button>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderTop: '1px solid var(--border)', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-3)' }}>
-            <span>Showing {uploads.length}</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-ghost btn-sm">← prev</button>
-              <button className="btn btn-ghost btn-sm">next →</button>
-            </div>
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-3)' }}>
+            {uploads.length} upload{uploads.length !== 1 ? 's' : ''}
           </div>
         </div>
       )}
+
+      {openMenu && menuPos && (() => {
+        const u = uploads.find(x => x.id === openMenu);
+        if (!u) return null;
+        const shareUrl = `${window.location.origin}/f/${u.id}`;
+        return createPortal(
+          <div
+            style={{
+              position: 'fixed',
+              ...(menuPos.top !== undefined ? { top: menuPos.top } : { bottom: menuPos.bottom }),
+              right: menuPos.right,
+              zIndex: 1000,
+              background: 'var(--bg-2)', border: '1px solid var(--border)',
+              borderRadius: 8, padding: '4px 0', minWidth: 160, boxShadow: '0 8px 24px rgba(0,0,0,.5)',
+            }}
+          >
+            <button
+              className="row-menu-btn"
+              onClick={() => copyLink(u.id)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 16px', background: 'none', border: 'none', color: copied === u.id ? 'var(--accent)' : 'var(--text)', fontFamily: 'var(--mono)', fontSize: 13, cursor: 'pointer' }}
+            >
+              {copied === u.id ? '✓ copied' : 'copy link'}
+            </button>
+            <a
+              className="row-menu-btn"
+              href={shareUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => { setOpenMenu(null); setMenuPos(null); }}
+              style={{ display: 'block', padding: '8px 16px', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 13, textDecoration: 'none' }}
+            >
+              open ↗
+            </a>
+            <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+            <button
+              className="row-menu-btn"
+              onClick={() => deleteUpload(u.id)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 16px', background: 'none', border: 'none', color: 'var(--danger)', fontFamily: 'var(--mono)', fontSize: 13, cursor: 'pointer' }}
+            >
+              delete
+            </button>
+          </div>,
+          document.body
+        );
+      })()}
     </div>
   );
 }
@@ -476,9 +601,24 @@ function KeysTab({ apiKeys, apiKey, currentKey, onRefresh }) {
   }
 
   function copyNewKey() {
-    navigator.clipboard?.writeText(newGeneratedKey);
+    const text = newGeneratedKey;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => execCopy(text));
+    } else {
+      execCopy(text);
+    }
     setNewKeyCopied(true);
     setTimeout(() => setNewKeyCopied(false), 1500);
+  }
+
+  function execCopy(text) {
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
   }
 
   return (
@@ -507,6 +647,9 @@ function KeysTab({ apiKeys, apiKey, currentKey, onRefresh }) {
               {newKeyCopied ? 'copied ✓' : 'copy'}
             </button>
           </div>
+          <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 10, padding: '8px 12px', background: 'var(--bg)', borderRadius: 6, border: '1px solid var(--border)' }}>
+            $ tf auth {newGeneratedKey}
+          </div>
           <button
             onClick={() => setNewGeneratedKey(null)}
             style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
@@ -516,8 +659,8 @@ function KeysTab({ apiKeys, apiKey, currentKey, onRefresh }) {
         </div>
       )}
 
-      <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-1)', marginBottom: 32 }}>
-        <table className="table">
+      <div className="table-wrap" style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-1)', marginBottom: 32 }}>
+        <table className="table" style={{ minWidth: 580 }}>
           <thead>
             <tr><th>Name</th><th>Token</th><th>Scope</th><th>Used today</th><th>Last used</th><th>Created</th><th /></tr>
           </thead>
@@ -647,7 +790,7 @@ function BillingTab({ plan, apiKey }) {
       )}
 
       {/* Current plan card */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 32 }}>
+      <div className="billing-cards" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 32 }}>
         <div className="card">
           <div className="mono muted-2" style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Current plan</div>
           <div style={{ fontSize: 28, fontWeight: 600, marginTop: 8, textTransform: 'capitalize', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -725,7 +868,7 @@ function BillingTab({ plan, apiKey }) {
           <div style={{ padding: '12px 16px', background: 'var(--bg-1)', fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)' }}>
             What you unlock
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid var(--border)' }}>
+          <div className="billing-compare" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid var(--border)' }}>
             {[
               { label: 'Free (current)', items: ['500 MB / upload', '20 uploads / day', '48h max TTL', 'Public links only'] },
               { label: 'Pro · $12/mo', items: ['50 GB / upload', 'Unlimited / day', '30d max TTL', 'Password links + MCP'], accent: true },
@@ -743,13 +886,64 @@ function BillingTab({ plan, apiKey }) {
   );
 }
 
-function SettingsTab({ user }) {
+function SettingsTab({ user, apiKey }) {
   const [toggles, setToggles] = useState({ req_password: false, block_tor: false, email_large: true, stream_audit: false });
+  const [username, setUsername] = useState(user.username);
+  const [savingUsername, setSavingUsername] = useState(false);
+  const [usernameMsg, setUsernameMsg] = useState('');
+  const [usernameErr, setUsernameErr] = useState('');
+
+  async function saveUsername() {
+    if (!username || username === user.username) return;
+    setSavingUsername(true);
+    setUsernameMsg('');
+    setUsernameErr('');
+    try {
+      const res = await fetch('/api/dashboard/username', {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+      const d = await res.json();
+      if (d.username) {
+        setUsernameMsg('✓ saved');
+        setTimeout(() => setUsernameMsg(''), 2000);
+      } else {
+        setUsernameErr(d.error || 'failed');
+      }
+    } catch {
+      setUsernameErr('network error');
+    }
+    setSavingUsername(false);
+  }
 
   return (
     <div style={{ maxWidth: 720 }}>
       <div className="section-h"><h2>Account</h2></div>
-      <Field label="Username" value={user.username} hint="Used in upload attribution and audit log." />
+
+      <div className="settings-row" style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 24, padding: '20px 0', borderBottom: '1px solid var(--border)' }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 500 }}>Username</div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Used in upload attribution and audit log.</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            value={username}
+            onChange={e => { setUsername(e.target.value); setUsernameMsg(''); setUsernameErr(''); }}
+            onKeyDown={e => e.key === 'Enter' && saveUsername()}
+            style={{ width: 220, background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 4, padding: '8px 10px', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 13, outline: 'none' }}
+          />
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={saveUsername}
+            disabled={savingUsername || !username || username === user.username}
+          >
+            {savingUsername ? '…' : usernameMsg || 'Save'}
+          </button>
+          {usernameErr && <span style={{ color: 'var(--danger)', fontFamily: 'var(--mono)', fontSize: 12 }}>{usernameErr}</span>}
+        </div>
+      </div>
+
       <Field label="Default TTL" value="7d" hint="Applied when no --expires flag is set." />
       <Field label="Plan" value={user.plan} hint="Current plan tier." />
 
@@ -774,7 +968,7 @@ function SettingsTab({ user }) {
 
 function Field({ label, value, hint }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 24, padding: '20px 0', borderBottom: '1px solid var(--border)' }}>
+    <div className="settings-row" style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 24, padding: '20px 0', borderBottom: '1px solid var(--border)' }}>
       <div>
         <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
         <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{hint}</div>
@@ -796,6 +990,444 @@ function ToggleRow({ label, on, onChange }) {
       >
         <span style={{ position: 'absolute', top: 3, left: on ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: on ? '#000' : 'var(--text-3)', transition: 'left .12s' }} />
       </button>
+    </div>
+  );
+}
+
+function AuditTab({ apiKey }) {
+  const [logs, setLogs] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/dashboard/audit', { headers: { Authorization: 'Bearer ' + apiKey } })
+      .then(r => r.json())
+      .then(d => setLogs(d.logs || []))
+      .catch(() => setLogs([]))
+      .finally(() => setLoading(false));
+  }, [apiKey]);
+
+  function uaShort(ua) {
+    if (!ua || ua === '—') return '—';
+    if (ua.includes('curl')) return 'curl';
+    if (ua.includes('python')) return 'python';
+    if (ua.includes('node')) return 'node';
+    if (ua.includes('Chrome')) return 'Chrome';
+    if (ua.includes('Firefox')) return 'Firefox';
+    if (ua.includes('Safari')) return 'Safari';
+    return ua.slice(0, 24);
+  }
+
+  return (
+    <div>
+      <div className="section-h">
+        <h2>Audit log</h2>
+        <span className="mono muted-2" style={{ fontSize: 12 }}>last 100 download events</span>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: '48px 0', textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text-3)' }}>loading…</div>
+      ) : logs.length === 0 ? (
+        <div style={{ padding: '64px 32px', textAlign: 'center', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-3)', fontFamily: 'var(--mono)', fontSize: 13 }}>
+          no downloads recorded yet — events appear here when someone downloads one of your files
+        </div>
+      ) : (
+        <div className="table-wrap" style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-1)' }}>
+          <table className="table" style={{ minWidth: 580 }}>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>IP</th>
+                <th>Client</th>
+                <th style={{ width: 140 }}>When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map(l => (
+                <tr key={l.id}>
+                  <td>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{l.filename}</div>
+                    <div className="mono" style={{ fontSize: 11, color: 'var(--text-4)' }}>{l.upload_id}</div>
+                  </td>
+                  <td className="mono" style={{ fontSize: 12, color: 'var(--text-2)' }}>{l.ip}</td>
+                  <td className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{uaShort(l.user_agent)}</td>
+                  <td className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{timeAgo(l.downloaded_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-3)' }}>
+            {logs.length} event{logs.length !== 1 ? 's' : ''}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WebhooksTab({ plan }) {
+  const isPaid = plan === 'pro' || plan === 'team';
+  const [url, setUrl] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  const events = ['upload.created', 'upload.downloaded', 'upload.expired', 'upload.deleted'];
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <div className="section-h"><h2>Webhooks</h2></div>
+
+      {!isPaid ? (
+        <div style={{ padding: 32, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg-1)', textAlign: 'center' }}>
+          <div className="mono" style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 12 }}>Pro feature</div>
+          <h3 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 10px' }}>Webhooks require Pro or Team</h3>
+          <p className="muted" style={{ fontSize: 14, margin: '0 0 20px', lineHeight: 1.6 }}>
+            Get notified in real time when files are uploaded, downloaded, or expire. POST events to any URL.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 320, margin: '0 auto 24px', textAlign: 'left' }}>
+            {events.map(e => (
+              <div key={e} className="mono" style={{ fontSize: 13, color: 'var(--text-2)', display: 'flex', gap: 8 }}>
+                <span style={{ color: 'var(--accent)' }}>▸</span>{e}
+              </div>
+            ))}
+          </div>
+          <Link className="btn btn-primary" to="/pricing">Upgrade to Pro</Link>
+        </div>
+      ) : (
+        <div>
+          <div style={{ marginBottom: 24, padding: 20, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-1)' }}>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Endpoint URL</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={url}
+                onChange={e => { setUrl(e.target.value); setSaved(false); }}
+                placeholder="https://your-server.com/webhooks/transfa"
+                style={{ flex: 1, background: 'var(--bg-0)', border: '1px solid var(--border)', borderRadius: 6, padding: '10px 12px', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 13, outline: 'none' }}
+              />
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => setSaved(true)}
+                disabled={!url}
+              >
+                {saved ? '✓ saved' : 'Save'}
+              </button>
+            </div>
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ padding: '12px 16px', background: 'var(--bg-1)', fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)', borderBottom: '1px solid var(--border)' }}>Events</div>
+            {events.map(e => (
+              <div key={e} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+                <span className="mono" style={{ fontSize: 13 }}>{e}</span>
+                <span className="pill pill-ok" style={{ fontSize: 10 }}><span className="dot" />active</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TeamTab({ plan, user }) {
+  const isTeam = plan === 'team';
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <div className="section-h"><h2>Team</h2></div>
+
+      {!isTeam ? (
+        <div style={{ padding: 32, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg-1)', textAlign: 'center' }}>
+          <div className="mono" style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 12 }}>Team plan feature</div>
+          <h3 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 10px' }}>Invite your team</h3>
+          <p className="muted" style={{ fontSize: 14, margin: '0 0 20px', lineHeight: 1.6, maxWidth: '48ch', marginLeft: 'auto', marginRight: 'auto' }}>
+            Share a workspace, audit log, and upload quota with your whole team. SAML SSO and SCIM provisioning included.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 400, margin: '0 auto 24px', textAlign: 'left' }}>
+            {['Shared workspace', 'SAML SSO + SCIM', 'Team audit log', 'Shared upload quota', 'Slack-channel support', 'DPA available'].map(f => (
+              <div key={f} style={{ fontSize: 13, color: 'var(--text-2)', display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                <span style={{ color: 'var(--accent)', fontFamily: 'var(--mono)' }}>▸</span>{f}
+              </div>
+            ))}
+          </div>
+          <Link className="btn btn-primary" to="/pricing">Upgrade to Team — $48/mo</Link>
+        </div>
+      ) : (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <span className="muted" style={{ fontSize: 13 }}>1 member</span>
+            <button className="btn btn-primary btn-sm">+ Invite member</button>
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-1)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px' }}>
+              <div className="avatar">{user.username.slice(0, 2).toUpperCase()}</div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>{user.username}</div>
+                <div className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>owner</div>
+              </div>
+              <span className="pill pill-ok" style={{ marginLeft: 'auto', fontSize: 10 }}><span className="dot" />active</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PLAN_MAX_SIZES = {
+  guest: 10 * 1024 * 1024,
+  free: 500 * 1024 * 1024,
+  pro: 50 * 1024 * 1024 * 1024,
+  team: 100 * 1024 * 1024 * 1024,
+};
+
+function UploadModal({ apiKey, plan, stats, onClose, onSuccess }) {
+  const [file, setFile] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  const maxSize = PLAN_MAX_SIZES[plan] || PLAN_MAX_SIZES.free;
+  const atLimit = stats.uploads_limit && stats.uploads_this_month >= stats.uploads_limit;
+
+  function handleFile(f) {
+    if (!f) return;
+    if (f.size > maxSize) {
+      setError(`File too large for ${plan} plan (max ${formatBytes(maxSize)})`);
+      return;
+    }
+    setFile(f);
+    setError(null);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    handleFile(e.dataTransfer.files[0]);
+  }
+
+  function upload() {
+    if (!file || uploading) return;
+    setUploading(true);
+    setProgress(0);
+    setError(null);
+
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
+    };
+
+    xhr.onload = () => {
+      setUploading(false);
+      if (xhr.status === 200 || xhr.status === 201) {
+        try {
+          setResult(JSON.parse(xhr.responseText));
+          setProgress(100);
+        } catch {
+          setError('Upload failed: invalid response');
+        }
+      } else {
+        try {
+          const d = JSON.parse(xhr.responseText);
+          setError(d.error || `Upload failed (${xhr.status})`);
+        } catch {
+          setError(`Upload failed (${xhr.status})`);
+        }
+      }
+    };
+
+    xhr.onerror = () => { setUploading(false); setError('Upload failed: network error'); };
+
+    xhr.open('POST', '/api/upload');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + apiKey);
+    xhr.send(formData);
+  }
+
+  function copyResult() {
+    const url = result.url || result.download_url;
+    navigator.clipboard?.writeText(url).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return createPortal(
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 12, padding: 32, width: '100%', maxWidth: 480, position: 'relative' }}>
+        <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 16, background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 4 }}>✕</button>
+
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>New upload</div>
+        <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 24 }}>
+          {plan} plan · max {formatBytes(maxSize)} per file
+          {stats.uploads_limit ? ` · ${stats.uploads_this_month || 0}/${stats.uploads_limit} uploads this month` : ''}
+        </div>
+
+        {atLimit && (
+          <div style={{ marginBottom: 16, padding: '10px 14px', background: 'rgba(255,92,92,0.06)', border: '1px solid rgba(255,92,92,0.3)', borderRadius: 6, fontSize: 13, color: 'var(--danger)' }}>
+            Monthly limit reached ({stats.uploads_limit}/{stats.uploads_limit}). <Link to="/pricing" onClick={onClose} style={{ color: 'var(--danger)', textDecoration: 'underline' }}>Upgrade to continue.</Link>
+          </div>
+        )}
+
+        {!result ? (
+          <>
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              onClick={() => { if (!file) document.getElementById('modal-file-input').click(); }}
+              style={{
+                border: `2px dashed ${dragOver ? 'var(--accent)' : file ? 'var(--ok, #46e08b)' : 'var(--border)'}`,
+                borderRadius: 8, padding: '32px 24px', textAlign: 'center',
+                cursor: file ? 'default' : 'pointer',
+                background: dragOver ? 'var(--accent-soft)' : 'var(--bg-0)',
+                transition: 'border-color .15s, background .15s',
+                marginBottom: 16,
+              }}
+            >
+              <input id="modal-file-input" type="file" style={{ display: 'none' }} onChange={(e) => handleFile(e.target.files[0])} />
+              {file ? (
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)', marginBottom: 4 }}>{file.name}</div>
+                  <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{formatBytes(file.size)}</div>
+                  {!uploading && (
+                    <button onClick={(e) => { e.stopPropagation(); setFile(null); setError(null); }} style={{ background: 'none', border: 'none', color: 'var(--text-4)', cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 11, marginTop: 8 }}>
+                      remove
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 4 }}>Drop a file here or click to browse</div>
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--text-4)' }}>max {formatBytes(maxSize)}</div>
+                </div>
+              )}
+            </div>
+
+            {uploading && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ height: 6, background: 'var(--bg-2)', borderRadius: 100, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: progress + '%', background: 'var(--accent)', borderRadius: 100, transition: 'width .1s' }} />
+                </div>
+                <div className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6, textAlign: 'right' }}>{progress}%</div>
+              </div>
+            )}
+
+            {error && (
+              <div style={{ marginBottom: 16, padding: '10px 14px', background: 'rgba(255,92,92,0.06)', border: '1px solid rgba(255,92,92,0.3)', borderRadius: 6, fontSize: 13, color: 'var(--danger)' }}>{error}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose} disabled={uploading}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1, justifyContent: 'center' }}
+                onClick={upload}
+                disabled={!file || uploading || !!atLimit}
+              >
+                {uploading ? `uploading… ${progress}%` : 'Upload'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div>
+            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', display: 'grid', placeItems: 'center', margin: '0 auto 12px' }}>
+                <span style={{ color: 'var(--accent)', fontSize: 22 }}>✓</span>
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Upload complete</div>
+              <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{result.filename}</div>
+            </div>
+
+            <div style={{ marginBottom: 20, padding: 16, background: 'var(--bg-0)', border: '1px solid var(--border)', borderRadius: 8 }}>
+              <div className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Share link</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <code style={{ flex: 1, fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', wordBreak: 'break-all' }}>
+                  {result.url}
+                </code>
+                <button className={'copy-btn' + (copied ? ' copied' : '')} onClick={copyResult}>
+                  {copied ? 'copied ✓' : 'copy'}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setFile(null); setResult(null); setProgress(0); }}>
+                Upload another
+              </button>
+              <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={onSuccess}>Done</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function McpTab({ currentKey }) {
+  const [copied, setCopied] = useState(null);
+
+  function copy(text, id) {
+    navigator.clipboard?.writeText(text).catch(() => {});
+    setCopied(id);
+    setTimeout(() => setCopied(null), 1400);
+  }
+
+  const masked = currentKey.slice(0, 12) + '•'.repeat(16) + currentKey.slice(-4);
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <div className="section-h"><h2>MCP server</h2></div>
+
+      <div style={{ marginBottom: 24, padding: 20, border: '1px solid var(--accent-line)', borderRadius: 8, background: 'var(--accent-soft)' }}>
+        <div className="mono" style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 6 }}>Your MCP endpoint</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <code style={{ flex: 1, fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text)' }}>https://mcp.transfa.sh/v1</code>
+          <button className={'copy-btn' + (copied === 'url' ? ' copied' : '')} onClick={() => copy('https://mcp.transfa.sh/v1', 'url')}>
+            {copied === 'url' ? 'copied' : 'copy'}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Claude Desktop</div>
+        <div style={{ position: 'relative', background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 8, padding: 20, fontFamily: 'var(--mono)', fontSize: 13, lineHeight: 1.7 }}>
+          <button className={'copy-btn' + (copied === 'claude' ? ' copied' : '')} style={{ position: 'absolute', top: 12, right: 12 }} onClick={() => copy(`{\n  "mcpServers": {\n    "transfa": {\n      "url": "https://mcp.transfa.sh/v1",\n      "headers": { "Authorization": "Bearer ${currentKey}" }\n    }\n  }\n}`, 'claude')}>
+            {copied === 'claude' ? 'copied' : 'copy'}
+          </button>
+          <span style={{ color: 'var(--text-3)' }}>{'// ~/Library/Application Support/Claude/claude_desktop_config.json'}</span>{'\n'}
+          {'{\n'}
+          {'  '}<span style={{ color: 'var(--tok-str)' }}>"mcpServers"</span>{': {\n'}
+          {'    '}<span style={{ color: 'var(--tok-str)' }}>"transfa"</span>{': {\n'}
+          {'      '}<span style={{ color: 'var(--tok-str)' }}>"url"</span>{': '}<span style={{ color: 'var(--accent)' }}>"https://mcp.transfa.sh/v1"</span>{',\n'}
+          {'      '}<span style={{ color: 'var(--tok-str)' }}>"headers"</span>{': { '}<span style={{ color: 'var(--tok-str)' }}>"Authorization"</span>{': '}<span style={{ color: 'var(--accent)' }}>{`"Bearer ${masked}"`}</span>{' }\n'}
+          {'    }\n'}
+          {'  }\n'}
+          {'}'}
+        </div>
+      </div>
+
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Available tools</div>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+          {[
+            { tool: 'transfa.upload', desc: 'Upload a file and get a signed link back' },
+            { tool: 'transfa.fetch', desc: 'Download a file by ID or URL' },
+            { tool: 'transfa.list', desc: 'List recent uploads with metadata' },
+            { tool: 'transfa.rm', desc: 'Delete an upload by ID' },
+          ].map((t, i, arr) => (
+            <div key={t.tool} style={{ display: 'flex', gap: 16, padding: '12px 16px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'baseline' }}>
+              <code style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', flexShrink: 0 }}>{t.tool}</code>
+              <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{t.desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

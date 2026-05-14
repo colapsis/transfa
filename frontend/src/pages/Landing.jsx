@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from 'react'; // eslint-disable-line
 import { Link } from 'react-router-dom';
 import Footer from '../components/Footer.jsx';
 import CodeWindow, { Sh } from '../components/CodeWindow.jsx';
@@ -100,11 +100,11 @@ export default function Landing() {
 
 function Hero() {
   return (
-    <section className="grid-bg" style={{ padding: '96px 32px 64px', borderBottom: '1px solid var(--border)' }}>
-      <div className="container" style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 56, alignItems: 'center' }}>
+    <section className="grid-bg hero-section" style={{ padding: '96px 32px 64px', borderBottom: '1px solid var(--border)' }}>
+      <div className="container hero-grid" style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 56, alignItems: 'center' }}>
         <div>
           <div style={{ display: 'flex', gap: 10, marginBottom: 28 }}>
-            <span className="pill pill-accent"><span className="dot" />v1.4 · streaming uploads</span>
+            <span className="pill pill-accent"><span className="dot" />no account needed</span>
             <span className="pill"><span className="dot" style={{ background: 'var(--text-3)' }} />MCP server included</span>
           </div>
           <h1 className="h1">
@@ -113,7 +113,7 @@ function Hero() {
             <span className="accent">agents.</span>
           </h1>
           <p className="lead" style={{ marginTop: 32 }}>
-            Dead-simple file sharing for AI agents and developers. One command. Signed link. 7-day expiry. No accounts for recipients, no UI, no nonsense.
+            One command sends any file and returns a signed link. No account, no browser, no config. Just works.
           </p>
           <div style={{ marginTop: 36, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <Link className="btn btn-primary btn-lg" to="/docs">
@@ -129,21 +129,20 @@ function Hero() {
         </div>
 
         <div>
-          <CodeWindow title="~ — zsh" copy="curl -fsSL transfa.sh/install | sh" lang="bash">
-            <span className="tok-c"># install in 5 seconds</span>{'\n'}
-            <Sh><span className="tok-cmd">curl</span> <span className="tok-flag">-fsSL</span> transfa.sh/install | sh</Sh>{'\n'}
-            <span className="tok-out">  ▸ transfa v1.4.2 → /usr/local/bin/tf</span>{'\n\n'}
-            <span className="tok-c"># send anything, anywhere</span>{'\n'}
-            <Sh><span className="tok-cmd">tf</span> dataset.parquet</Sh>{'\n'}
-            <span className="tok-out">  uploading  2.4 GB  ▰▰▰▰▰▰▰▰▰▰  100%   18.2 MB/s</span>{'\n'}
-            <span className="tok-out">  signed     sha256:</span><span className="tok-dim">9f3a…c10e</span>{'\n'}
-            <span className="tok-out">  expires    in 7 days</span>{'\n\n'}
-            <span className="tok-cmd">→ https://transfa.sh/</span><span className="tok-str">a7f9k2</span>{'\n'}
-            <span className="tok-dim">  copied to clipboard.</span>
+          <CodeWindow title="~ — zsh" copy="npm install -g transfa" lang="bash">
+            <span className="tok-c"># install once</span>{'\n'}
+            <Sh><span className="tok-cmd">npm</span> install <span className="tok-flag">-g</span> transfa</Sh>{'\n\n'}
+            <span className="tok-c"># upload — no account, no auth, nothing</span>{'\n'}
+            <Sh><span className="tok-cmd">tf</span> upload report.pdf</Sh>{'\n'}
+            <span className="tok-out">  uploading  4.2 MB  ▰▰▰▰▰▰▰▰▰▰  100%   24.1 MB/s</span>{'\n'}
+            <span className="tok-out">  expires    2026-05-15T09:14:00.000Z</span>{'\n\n'}
+            <span className="tok-ok">→ agent</span>{'  '}<span className="tok-str">https://transfa.sh/api/download/a7f9k2</span>{'\n'}
+            <span className="tok-dim">→ share</span>{'  '}https://transfa.sh/f/a7f9k2{'\n\n'}
+            <span className="tok-dim">  key saved → ~/.transfa/config.json</span>
           </CodeWindow>
 
-          <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-            <MiniStat label="median p50 upload" value="18.2 MB/s" />
+          <div className="mini-stats" style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            <MiniStat label="no account needed" value="zero auth" />
             <MiniStat label="max file size" value="100 GB" />
             <MiniStat label="setup time" value="5 sec" />
           </div>
@@ -163,16 +162,37 @@ function MiniStat({ label, value }) {
 }
 
 function Logos() {
-  const names = ['Anthropic', 'LangChain', 'Replicate', 'Modal', 'Cursor', 'Hugging Face', 'Vercel', 'Browserbase'];
+  const row1 = ['Anthropic', 'LangChain', 'Replicate', 'Modal', 'Cursor', 'Hugging Face', 'Vercel', 'Browserbase'];
+  const row2 = ['Vercel', 'Modal', 'Browserbase', 'Anthropic', 'Replicate', 'Cursor', 'LangChain', 'Hugging Face'];
+  // Triple each row so there are no gaps at any viewport width during the loop
+  const t1 = [...row1, ...row1, ...row1];
+  const t2 = [...row2, ...row2, ...row2];
+
   return (
-    <section style={{ padding: '48px 32px', borderBottom: '1px solid var(--border)' }}>
-      <div className="container" style={{ display: 'flex', alignItems: 'center', gap: 32, justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <div className="mono muted-2" style={{ fontSize: 12, letterSpacing: '0.08em' }}>
-          // trusted by ~14,200 builders shipping agents at
+    <section className="logos-section">
+      <p className="logos-eyebrow">
+        trusted by ~14,200 builders shipping agents at
+      </p>
+
+      <div className="logos-stage">
+        <div className="logos-fade logos-fade-l" />
+        <div className="logos-fade logos-fade-r" />
+
+        <div className="logos-track logos-track-fwd">
+          {t1.map((name, i) => (
+            <span key={i} className="logos-chip">
+              <span className="logos-dot" />
+              {name}
+            </span>
+          ))}
         </div>
-        <div style={{ display: 'flex', gap: 36, flexWrap: 'wrap', alignItems: 'center' }}>
-          {names.map(n => (
-            <span key={n} style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--text-3)', letterSpacing: '-0.01em' }}>{n}</span>
+
+        <div className="logos-track logos-track-rev">
+          {t2.map((name, i) => (
+            <span key={i} className="logos-chip">
+              <span className="logos-dot" />
+              {name}
+            </span>
           ))}
         </div>
       </div>
@@ -185,30 +205,30 @@ function HowItWorks() {
     {
       n: '01',
       title: 'Install once.',
-      body: 'Single static binary. No runtime, no dependencies. Drop into your agent\'s tool list and forget it.',
-      code: <><Sh><span className="tok-cmd">brew</span> install transfa</Sh></>,
+      body: 'One npm install. No runtime, no dependencies. Drop into your agent\'s tool list and forget it.',
+      code: <><Sh><span className="tok-cmd">npm</span> install <span className="tok-flag">-g</span> transfa</Sh></>,
     },
     {
       n: '02',
       title: 'Pipe anything in.',
-      body: 'Files, directories, stdin, even a docker save. Transfa figures out the shape and streams it up.',
-      code: <><Sh><span className="tok-cmd">tf</span> ./build/ <span className="tok-flag">--ttl=24h</span></Sh>{'\n'}<Sh><span className="tok-cmd">cat</span> log.json | <span className="tok-cmd">tf</span> <span className="tok-flag">--name</span>=run.json</Sh></>,
+      body: 'Files, stdin, anything. The CLI streams it up and signs the content.',
+      code: <><Sh><span className="tok-cmd">tf</span> upload model.pt <span className="tok-flag">--expires=24h</span></Sh>{'\n'}<Sh><span className="tok-cmd">cat</span> run.json | <span className="tok-cmd">tf</span> upload - <span className="tok-flag">--name</span>=run.json</Sh></>,
     },
     {
       n: '03',
       title: 'Hand off the link.',
       body: 'Recipient gets a signed URL. No login. No tracker. No \'choose a download speed\' screen. Just the file.',
-      code: <><span className="tok-cmd">→ https://transfa.sh/</span><span className="tok-str">a7f9k2</span>{'\n'}<span className="tok-dim">  expires in 7d · 0/∞ downloads</span></>,
+      code: <><span className="tok-ok">→ agent</span>{'  '}<span className="tok-str">https://transfa.sh/api/download/a7f9k2</span>{'\n'}<span className="tok-dim">→ share  https://transfa.sh/f/a7f9k2</span></>,
     },
   ];
   return (
-    <section style={{ padding: '120px 32px', borderBottom: '1px solid var(--border)' }}>
+    <section className="section-pad" style={{ padding: '120px 32px', borderBottom: '1px solid var(--border)' }}>
       <div className="container">
         <div style={{ maxWidth: 720, marginBottom: 64 }}>
           <div className="eyebrow">How it works</div>
           <h2 className="h2" style={{ marginTop: 16 }}>Three keystrokes from <span style={{ color: 'var(--accent)' }}>./file</span> to a shareable URL.</h2>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
+        <div className="how-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
           {steps.map(s => (
             <div key={s.n} className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{ padding: 28, borderBottom: '1px solid var(--border)' }}>
@@ -237,10 +257,10 @@ function ForAgents() {
     { k: 'Audit log', v: 'Every download is logged with IP, UA, and exact byte range. Pull it via API or stream to your SIEM.' },
   ];
   return (
-    <section style={{ padding: '120px 32px', borderBottom: '1px solid var(--border)' }}>
+    <section className="section-pad" style={{ padding: '120px 32px', borderBottom: '1px solid var(--border)' }}>
       <div className="container">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 80, alignItems: 'start' }}>
-          <div style={{ position: 'sticky', top: 80 }}>
+        <div className="for-agents-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 80, alignItems: 'start' }}>
+          <div className="for-agents-sticky" style={{ position: 'sticky', top: 80 }}>
             <div className="eyebrow">Built for autonomy</div>
             <h2 className="h2" style={{ marginTop: 16 }}>An agent should never get stuck on <span style={{ color: 'var(--accent)' }}>"upload this".</span></h2>
             <p className="lead" style={{ marginTop: 24 }}>
@@ -248,16 +268,17 @@ function ForAgents() {
             </p>
             <div className="code" style={{ marginTop: 28, fontSize: 13 }}>
               <span className="tok-c"># JSON output mode</span>{'\n'}
-              <Sh><span className="tok-cmd">tf</span> file.csv <span className="tok-flag">--json</span></Sh>{'\n'}
+              <Sh><span className="tok-cmd">tf</span> upload file.csv <span className="tok-flag">--json</span></Sh>{'\n'}
               <span className="tok-out">{'{'}</span>{'\n'}
-              <span className="tok-out">{'  "url": '}</span><span className="tok-str">"https://transfa.sh/k2j9f8"</span>,{'\n'}
+              <span className="tok-out">{'  "download_url": '}</span><span className="tok-str">"https://transfa.sh/api/download/k2j9f8"</span>,{'\n'}
+              <span className="tok-out">{'  "url": '}</span><span className="tok-str">"https://transfa.sh/f/k2j9f8"</span>,{'\n'}
               <span className="tok-out">{'  "sha256": '}</span><span className="tok-str">"9f3a…c10e"</span>,{'\n'}
               <span className="tok-out">{'  "bytes": '}</span><span className="tok-num">12482910</span>,{'\n'}
               <span className="tok-out">{'  "expires_at": '}</span><span className="tok-str">"2026-05-20T14:00Z"</span>{'\n'}
               <span className="tok-out">{'}'}</span>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: 'var(--border)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+          <div className="features-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: 'var(--border)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
             {features.map((f, i) => (
               <div key={f.k} style={{ background: 'var(--bg)', padding: 28, minHeight: 180 }}>
                 <div className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 12 }}>0{i + 1}</div>
@@ -274,8 +295,8 @@ function ForAgents() {
 
 function PricingTeaser() {
   const tiers = [
-    { name: 'free', price: '$0', desc: 'For tinkering.', items: ['2 GB / upload', '7-day expiry', '10 uploads / day', 'Public links only'] },
-    { name: 'pro', price: '$12', desc: 'For builders shipping daily.', featured: true, items: ['50 GB / upload', 'Up to 30-day expiry', 'Unlimited uploads', 'Password-gated links', 'API + MCP access'] },
+    { name: 'free', price: '$0', desc: 'For tinkering.', note: 'No signup? Just upload — guest mode gives you 10 MB, 5 files/day.', items: ['500 MB / upload', 'Up to 48h expiry', '20 uploads / day', 'Public links only'] },
+    { name: 'pro', price: '$12', desc: 'For builders shipping daily.', featured: true, items: ['50 GB / upload', 'Up to 30-day expiry', 'Unlimited storage', 'Password-gated links', 'API + MCP access'] },
     { name: 'team', price: '$48', desc: 'For agent fleets in production.', items: ['100 GB / upload', 'Custom expiry', '5 seats included', 'Audit log + SIEM stream', 'SAML SSO + DPA'] },
   ];
   return (
@@ -307,8 +328,13 @@ function PricingTeaser() {
                   style={{ width: '100%', justifyContent: 'center' }}
                   to="/dashboard"
                 >
-                  {t.name === 'free' ? 'Start free' : 'Start 14-day trial'}
+                  {t.name === 'free' ? 'Start free' : 'Start 3-day trial'}
                 </Link>
+                {t.note && (
+                  <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-4)', fontFamily: 'var(--mono)', lineHeight: 1.5 }}>
+                    {t.note}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -368,11 +394,11 @@ function CTA() {
       <div className="container" style={{ textAlign: 'center' }}>
         <h2 className="h2" style={{ fontSize: 'clamp(40px, 6vw, 80px)' }}>
           <span style={{ color: 'var(--text-3)', fontFamily: 'var(--mono)', fontWeight: 400 }}>$ </span>
-          <span>brew install </span>
-          <span style={{ color: 'var(--accent)' }}>transfa</span>
+          <span>tf upload </span>
+          <span style={{ color: 'var(--accent)' }}>anything</span>
         </h2>
         <p className="lead" style={{ margin: '24px auto 36px', textAlign: 'center' }}>
-          Free tier needs nothing but a terminal. Sign up takes 30 seconds and unlocks a key.
+          No key required to start. Run <code style={{ fontFamily: 'var(--mono)', fontSize: '0.9em' }}>tf upload</code> and get a link in seconds.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <Link className="btn btn-primary btn-lg" to="/docs">Start in 5 seconds <ArrowIcon /></Link>

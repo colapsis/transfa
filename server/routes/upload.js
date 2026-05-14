@@ -5,11 +5,142 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { nanoid } = require('nanoid');
+const mimeTypes = require('mime-types');
 const db = require('../db');
 const { getPlanLimits } = require('./auth');
 
+// Custom MIME types for formats not yet in mime-db
+// These are common in ML/data-science/DevOps workflows
+const EXTRA_MIME = {
+  safetensors: 'application/octet-stream',
+  parquet:     'application/vnd.apache.parquet',
+  arrow:       'application/vnd.apache.arrow.file',
+  feather:     'application/vnd.apache.arrow.file',
+  onnx:        'application/vnd.onnx',
+  pt:          'application/octet-stream',   // PyTorch checkpoint
+  pth:         'application/octet-stream',
+  pkl:         'application/octet-stream',
+  pickle:      'application/octet-stream',
+  ckpt:        'application/octet-stream',   // TF/Lightning checkpoint
+  bin:         'application/octet-stream',
+  npz:         'application/octet-stream',   // NumPy compressed
+  npy:         'application/octet-stream',
+  h5:          'application/x-hdf5',
+  hdf5:        'application/x-hdf5',
+  tflite:      'application/octet-stream',
+  mlmodel:     'application/octet-stream',   // Core ML
+  torchscript: 'application/octet-stream',
+  lora:        'application/octet-stream',
+  gguf:        'application/octet-stream',   // llama.cpp model format
+  ggml:        'application/octet-stream',
+  q4_0:        'application/octet-stream',
+  q8_0:        'application/octet-stream',
+  msgpack:     'application/msgpack',
+  capnp:       'application/octet-stream',
+  flatbuffers: 'application/octet-stream',
+  lance:       'application/octet-stream',   // Lance columnar format
+  duckdb:      'application/octet-stream',
+  sqlite:      'application/vnd.sqlite3',
+  db:          'application/vnd.sqlite3',
+  wasm:        'application/wasm',
+  avif:        'image/avif',
+  webp:        'image/webp',
+  heic:        'image/heic',
+  heif:        'image/heif',
+  jxl:         'image/jxl',
+  opus:        'audio/ogg',
+  flac:        'audio/flac',
+  aac:         'audio/aac',
+  m4a:         'audio/mp4',
+  webm:        'video/webm',
+  av1:         'video/av1',
+  ts:          'video/mp2t',
+  m3u8:        'application/vnd.apple.mpegurl',
+  stl:         'model/stl',
+  obj:         'model/obj',
+  glb:         'model/gltf-binary',
+  gltf:        'model/gltf+json',
+  usdz:        'model/vnd.usdz+zip',
+  blend:       'application/octet-stream',   // Blender file
+  fig:         'application/octet-stream',   // Figma
+  sketch:      'application/octet-stream',
+  xcf:         'image/x-xcf',
+  psd:         'image/vnd.adobe.photoshop',
+  ai:          'application/postscript',
+  eps:         'application/postscript',
+  dxf:         'image/vnd.dxf',
+  dwg:         'image/vnd.dwg',
+  toml:        'application/toml',
+  // Source code files missing from mime-db or incorrectly mapped
+  py:          'text/x-python',
+  pyx:         'text/x-python',
+  ipynb:       'application/x-ipynb+json',
+  rs:          'text/x-rustsrc',
+  go:          'text/x-go',
+  rb:          'text/x-ruby',
+  kt:          'text/x-kotlin',
+  kts:         'text/x-kotlin',
+  swift:       'text/x-swift',
+  scala:       'text/x-scala',
+  r:           'text/x-r',
+  rmd:         'text/x-r',
+  lua:         'text/x-lua',
+  zig:         'text/x-zig',
+  ex:          'text/x-elixir',
+  exs:         'text/x-elixir',
+  erl:         'text/x-erlang',
+  hrl:         'text/x-erlang',
+  clj:         'text/x-clojure',
+  cljs:        'text/x-clojure',
+  elm:         'text/x-elm',
+  ml:          'text/x-ocaml',
+  mli:         'text/x-ocaml',
+  fs:          'text/x-fsharp',
+  fsx:         'text/x-fsharp',
+  cs:          'text/x-csharp',
+  cpp:         'text/x-c++src',
+  cc:          'text/x-c++src',
+  cxx:         'text/x-c++src',
+  hpp:         'text/x-c++hdr',
+  cu:          'text/x-cuda',
+  cuh:         'text/x-cuda',
+  sol:         'text/x-solidity',
+  vy:          'text/x-vyper',
+  nix:         'text/plain',
+  tf:          'text/plain',
+  tfvars:      'text/plain',
+  hcl:         'text/plain',
+  ron:         'text/plain',
+  dhall:       'text/plain',
+  lock:        'text/plain',
+  env:         'text/plain',
+  diff:        'text/x-diff',
+  patch:       'text/x-diff',
+  pem:         'application/x-pem-file',
+  crt:         'application/x-x509-ca-cert',
+  p12:         'application/x-pkcs12',
+  pfx:         'application/x-pkcs12',
+};
+
+function detectMime(filename) {
+  const ext = path.extname(filename).replace('.', '').toLowerCase();
+  if (ext && EXTRA_MIME[ext]) return EXTRA_MIME[ext];
+  return mimeTypes.lookup(filename) || 'application/octet-stream';
+}
+
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+// Stream SHA-256 without buffering the entire file in memory
+function hashFile(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    fs.createReadStream(filePath, { highWaterMark: 65536 })
+      .on('data', chunk => hash.update(chunk))
+      .on('end', () => resolve(hash.digest('hex')))
+      .on('error', reject);
+  });
+}
 
 function getApiKey(req) {
   const authHeader = req.headers.authorization || '';
@@ -50,14 +181,24 @@ const upload = multer({
 router.post('/', upload.single('file'), async (req, res) => {
   const rawKey = getApiKey(req);
 
-  // Auto-generate a free key if none provided
+  // Auto-generate a guest key if none provided (guest plan = 10 MB / 5 per day / 24h TTL)
   let keyRow;
   let autoGenerated = false;
   if (!rawKey) {
     const { generateKey } = require('./auth');
     const newKey = generateKey();
-    db.prepare('INSERT INTO api_keys (key, name, scope) VALUES (?, ?, ?)').run(newKey, 'auto', 'read,write');
-    keyRow = db.prepare("SELECT k.*, NULL as username, 'free' as plan FROM api_keys k WHERE k.key = ?").get(newKey);
+    // Create a real user so the key works with /api/dashboard
+    const suffix = newKey.slice(-8).toLowerCase().replace(/[^a-z0-9]/g, '');
+    let userId;
+    try {
+      const u = db.prepare("INSERT INTO users (username, plan) VALUES (?, 'guest')").run('user_' + suffix);
+      userId = u.lastInsertRowid;
+    } catch {
+      const u2 = db.prepare("INSERT INTO users (username, plan) VALUES (?, 'guest')").run('user_' + suffix + '_' + Math.random().toString(36).slice(2, 5));
+      userId = u2.lastInsertRowid;
+    }
+    db.prepare('INSERT INTO api_keys (key, user_id, name, scope) VALUES (?, ?, ?, ?)').run(newKey, userId, 'guest', 'read,write');
+    keyRow = db.prepare("SELECT k.*, u.username, 'guest' as plan FROM api_keys k LEFT JOIN users u ON k.user_id = u.id WHERE k.key = ?").get(newKey);
     autoGenerated = true;
     keyRow._generatedKey = newKey;
   } else {
@@ -107,22 +248,35 @@ router.post('/', upload.single('file'), async (req, res) => {
   );
   const expiresAt = now + ttlSeconds;
 
-  // SHA-256
-  const fileBuffer = fs.readFileSync(req.file.path);
-  const sha256 = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+  // SHA-256 — streamed so the event loop stays free during hashing
+  let sha256;
+  try {
+    sha256 = await hashFile(req.file.path);
+  } catch (e) {
+    fs.unlink(req.file.path, () => {});
+    return res.status(500).json({ error: 'failed to process upload' });
+  }
 
-  // Idempotency: same key + same sha256 → return existing upload
+  // Compute password hash before idempotency check so we only match uploads with the same password intent
+  const passwordHash = req.body.password
+    ? crypto.createHash('sha256').update(String(req.body.password)).digest('hex')
+    : null;
+
+  // Idempotency: same key + same sha256 + same password → return existing upload
   const existing = db.prepare(
     `SELECT * FROM uploads
-     WHERE api_key_id = ? AND sha256 = ? AND deleted_at IS NULL AND expires_at > ?`
-  ).get(keyRow.id, sha256, now);
+     WHERE api_key_id = ? AND sha256 = ? AND deleted_at IS NULL AND expires_at > ?
+     AND password_hash IS ?`
+  ).get(keyRow.id, sha256, now, passwordHash);
 
   if (existing) {
     fs.unlinkSync(req.file.path);
     db.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(now, keyRow.id);
+    const base = getBaseUrl(req);
     const response = {
       id: existing.id,
-      url: `${getBaseUrl(req)}/f/${existing.id}`,
+      download_url: `${base}/api/download/${existing.id}`,
+      url: `${base}/f/${existing.id}`,
       filename: existing.original_filename,
       bytes: existing.size,
       sha256: existing.sha256,
@@ -138,16 +292,14 @@ router.post('/', upload.single('file'), async (req, res) => {
   const uploadId = nanoid(6);
   const originalFilename = req.body.filename || req.headers['x-transfa-filename'] || req.file.originalname;
 
-  const passwordHash = req.body.password
-    ? crypto.createHash('sha256').update(String(req.body.password)).digest('hex')
-    : null;
+  const mimeType = detectMime(originalFilename);
 
   db.prepare(
     `INSERT INTO uploads (id, api_key_id, filename, original_filename, size, sha256, mime_type, storage_path, expires_at, uploader_name, max_downloads, password_hash)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     uploadId, keyRow.id, req.file.filename, originalFilename,
-    req.file.size, sha256, req.file.mimetype,
+    req.file.size, sha256, mimeType,
     req.file.path, expiresAt,
     keyRow.username || null,
     req.body.max_downloads ? parseInt(req.body.max_downloads) : null,
@@ -156,9 +308,11 @@ router.post('/', upload.single('file'), async (req, res) => {
 
   db.prepare('UPDATE api_keys SET uploads_today = uploads_today + 1, last_used_at = ? WHERE id = ?').run(now, keyRow.id);
 
+  const base = getBaseUrl(req);
   const response = {
     id: uploadId,
-    url: `${getBaseUrl(req)}/f/${uploadId}`,
+    download_url: `${base}/api/download/${uploadId}`,
+    url: `${base}/f/${uploadId}`,
     filename: originalFilename,
     bytes: req.file.size,
     sha256,
@@ -194,7 +348,11 @@ router.get('/', (req, res) => {
 
   res.json({
     uploads: uploads.map(u => ({
-      ...u,
+      id: u.id,
+      filename: u.original_filename,
+      size: u.size,
+      sha256: u.sha256,
+      download_count: u.download_count,
       url: `${getBaseUrl(req)}/f/${u.id}`,
       created_at: new Date(u.created_at * 1000).toISOString(),
       expires_at: new Date(u.expires_at * 1000).toISOString(),

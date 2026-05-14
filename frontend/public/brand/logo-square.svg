@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <rect width="240" height="240" fill="#050505"></rect>
+  <rect x="50" y="50" width="140" height="140" rx="24" fill="#e8ff47"></rect>
+  <text x="120" y="158" font-family="&#39;Space Mono&#39;, ui-monospace, Menlo, monospace" font-weight="700" font-size="80" text-anchor="middle" fill="#050505" letter-spacing="-3">tf</text>
+</svg>

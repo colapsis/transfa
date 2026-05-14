@@ -105,9 +105,10 @@ router.get('/validate', (req, res) => {
 
 function getPlanLimits(plan) {
   const limits = {
-    free: { uploads_per_day: 20, max_file_size: 500 * 1024 * 1024, max_ttl_seconds: 48 * 3600 },
-    pro:  { uploads_per_day: 500, max_file_size: 5 * 1024 * 1024 * 1024, max_ttl_seconds: 30 * 24 * 3600 },
-    team: { uploads_per_day: 5000, max_file_size: 100 * 1024 * 1024 * 1024, max_ttl_seconds: 180 * 24 * 3600 },
+    guest: { uploads_per_day: 5,    max_file_size: 10 * 1024 * 1024,          max_ttl_seconds: 24 * 3600 },
+    free:  { uploads_per_day: 20,   max_file_size: 500 * 1024 * 1024,         max_ttl_seconds: 48 * 3600 },
+    pro:   { uploads_per_day: 500,  max_file_size: 50 * 1024 * 1024 * 1024,   max_ttl_seconds: 30 * 24 * 3600 },
+    team:  { uploads_per_day: 5000, max_file_size: 100 * 1024 * 1024 * 1024,  max_ttl_seconds: 180 * 24 * 3600 },
   };
   return limits[plan] || limits.free;
 }

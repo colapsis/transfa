@@ -7,6 +7,11 @@ const DB_PATH = path.join(__dirname, '../transfa.db');
 const db = new Database(DB_PATH);
 
 db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');    // safe with WAL; ~2x faster than FULL
+db.pragma('cache_size = -65536');     // 64 MB page cache per connection
+db.pragma('temp_store = MEMORY');     // temp tables/indices in RAM
+db.pragma('mmap_size = 268435456');   // 256 MB memory-mapped I/O for reads
+db.pragma('busy_timeout = 5000');     // wait up to 5 s on SQLITE_BUSY instead of erroring
 db.pragma('foreign_keys = ON');
 
 db.exec(`
@@ -68,6 +73,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_uploads_api_key ON uploads(api_key_id);
   CREATE INDEX IF NOT EXISTS idx_uploads_expires ON uploads(expires_at);
   CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
+  CREATE INDEX IF NOT EXISTS idx_uploads_sha256 ON uploads(api_key_id, sha256);
+  CREATE INDEX IF NOT EXISTS idx_upload_log_upload ON download_log(upload_id);
+  CREATE INDEX IF NOT EXISTS idx_uploads_active ON uploads(api_key_id, deleted_at, expires_at);
 `);
 
 module.exports = db;

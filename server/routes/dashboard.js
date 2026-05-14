@@ -102,6 +102,64 @@ router.post('/keys/revoke', requireKey, (req, res) => {
   res.json({ revoked: true });
 });
 
+// PATCH /api/dashboard/username
+router.patch('/username', requireKey, (req, res) => {
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: 'username required' });
+
+  const clean = username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 32);
+  if (clean.length < 2) return res.status(400).json({ error: 'username must be 2–32 chars: a-z 0-9 . _ -' });
+  if (!req.apiKey.user_id) return res.status(400).json({ error: 'no user account on this key' });
+
+  try {
+    db.prepare('UPDATE users SET username = ? WHERE id = ?').run(clean, req.apiKey.user_id);
+    res.json({ username: clean });
+  } catch (e) {
+    if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'username already taken' });
+    res.status(500).json({ error: 'failed to update username' });
+  }
+});
+
+// GET /api/dashboard/audit — recent download events across all user uploads
+router.get('/audit', requireKey, (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+
+  let logs;
+  if (req.apiKey.user_id) {
+    logs = db.prepare(`
+      SELECT dl.id, dl.upload_id, dl.ip, dl.user_agent, dl.downloaded_at,
+             u.original_filename as filename
+      FROM download_log dl
+      JOIN uploads u ON u.id = dl.upload_id
+      JOIN api_keys ak ON ak.id = u.api_key_id
+      WHERE ak.user_id = ?
+      ORDER BY dl.downloaded_at DESC
+      LIMIT ?
+    `).all(req.apiKey.user_id, limit);
+  } else {
+    logs = db.prepare(`
+      SELECT dl.id, dl.upload_id, dl.ip, dl.user_agent, dl.downloaded_at,
+             u.original_filename as filename
+      FROM download_log dl
+      JOIN uploads u ON u.id = dl.upload_id
+      WHERE u.api_key_id = ?
+      ORDER BY dl.downloaded_at DESC
+      LIMIT ?
+    `).all(req.apiKey.id, limit);
+  }
+
+  res.json({
+    logs: logs.map(l => ({
+      id: l.id,
+      upload_id: l.upload_id,
+      filename: l.filename,
+      ip: l.ip ? l.ip.replace(/^::ffff:/, '') : '—',
+      user_agent: l.user_agent || '—',
+      downloaded_at: new Date(l.downloaded_at * 1000).toISOString(),
+    })),
+  });
+});
+
 // POST /api/dashboard/keys — create new key
 router.post('/keys', requireKey, (req, res) => {
   const { generateKey } = require('./auth');
