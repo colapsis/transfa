@@ -194,10 +194,10 @@ async function upload(filePath, opts) {
   const shareUrl = data.url;
 
   // Agent link first (direct download, no UI)
-  console.log(`\x1b[32m→ agent\x1b[0m  ${agentUrl}`);
+  console.log(`\x1b[32m→ Agent Link\x1b[0m  ${agentUrl}`);
   // Human link second (recipient page)
   if (agentUrl !== shareUrl) {
-    console.log(`\x1b[2m→ share\x1b[0m  ${shareUrl}`);
+    console.log(`\x1b[2m→ Human Link\x1b[0m  ${shareUrl}`);
   }
 
   if (!opts.quiet && !opts.json) {

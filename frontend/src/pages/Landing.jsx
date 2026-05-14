@@ -137,8 +137,8 @@ function Hero() {
             <Sh><span className="tok-cmd">tf</span> upload report.pdf</Sh>{'\n'}
             <span className="tok-out">  uploading  4.2 MB  ▰▰▰▰▰▰▰▰▰▰  100%   24.1 MB/s</span>{'\n'}
             <span className="tok-out">  expires    2026-05-15T09:14:00.000Z</span>{'\n\n'}
-            <span className="tok-ok">→ agent</span>{'  '}<span className="tok-str">https://transfa.sh/api/download/a7f9k2</span>{'\n'}
-            <span className="tok-dim">→ share</span>{'  '}https://transfa.sh/f/a7f9k2{'\n\n'}
+            <span className="tok-ok">→ Agent Link</span>{'  '}<span className="tok-str">https://transfa.sh/api/download/a7f9k2</span>{'\n'}
+            <span className="tok-dim">→ Human Link</span>{'  '}https://transfa.sh/f/a7f9k2{'\n\n'}
             <span className="tok-dim">  key saved → ~/.transfa/config.json</span>
           </CodeWindow>
 
@@ -405,7 +405,7 @@ function HowItWorks() {
       n: '03',
       title: 'Hand off the link.',
       body: 'Recipient gets a signed URL. No login. No tracker. No \'choose a download speed\' screen. Just the file.',
-      code: <><span className="tok-ok">→ agent</span>{'  '}<span className="tok-str">https://transfa.sh/api/download/a7f9k2</span>{'\n'}<span className="tok-dim">→ share  https://transfa.sh/f/a7f9k2</span></>,
+      code: <><span className="tok-ok">→ Agent Link</span>{'  '}<span className="tok-str">https://transfa.sh/api/download/a7f9k2</span>{'\n'}<span className="tok-dim">→ Human Link  https://transfa.sh/f/a7f9k2</span></>,
     },
   ];
   return (
