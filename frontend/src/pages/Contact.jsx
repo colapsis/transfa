@@ -6,7 +6,7 @@ export default function Contact() {
     <div className="page">
       <Seo
         title="Contact"
-        description="Get in touch with the transfa.sh team. Support via Telegram, security reports, and enterprise inquiries."
+        description="Get in touch with the transfa.sh team. Support via email, security reports, and enterprise inquiries."
         canonical="/contact"
         ogType="website"
       />
@@ -38,21 +38,9 @@ export default function Contact() {
                 <p className="muted" style={{ fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' }}>
                   Questions about plans, CLI issues, API behavior, or just want to say hi — we read everything and reply fast.
                 </p>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <a
-                    href="https://t.me/henloki"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn btn-primary"
-                    style={{ display: 'inline-flex' }}
-                  >
-                    @henloki on Telegram
-                    <svg style={{ marginLeft: 8 }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                  </a>
-                  <a href="mailto:tansfa.sh@gmail.com" className="btn btn-secondary" style={{ display: 'inline-flex' }}>
-                    tansfa.sh@gmail.com
-                  </a>
-                </div>
+                <a href="mailto:tansfa.sh@gmail.com" className="btn btn-primary" style={{ display: 'inline-flex' }}>
+                  tansfa.sh@gmail.com
+                </a>
               </div>
             </div>
 
@@ -69,8 +57,8 @@ export default function Contact() {
                 <p className="muted" style={{ fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' }}>
                   More than 50 users, compliance requirements, or need a dedicated region? Reach out and we'll set something up.
                 </p>
-                <a href="https://t.me/henloki" target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ display: 'inline-flex' }}>
-                  Talk to founders
+                <a href="mailto:tansfa.sh@gmail.com" className="btn btn-secondary" style={{ display: 'inline-flex' }}>
+                  tansfa.sh@gmail.com
                 </a>
               </div>
             </div>
@@ -84,8 +72,8 @@ export default function Contact() {
           <div className="eyebrow" style={{ marginBottom: 24 }}>Response times</div>
           <div className="response-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
             {[
-              { label: 'Questions & Support', time: '< 12h', note: 'Telegram · email' },
-              { label: 'Enterprise', time: '< 24h', note: 'Telegram @henloki' },
+              { label: 'Questions & Support', time: '< 12h', note: 'email' },
+              { label: 'Enterprise', time: '< 24h', note: 'email' },
             ].map(({ label, time, note }) => (
               <div key={label} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '20px 24px', background: 'var(--bg-1)' }}>
                 <div className="mono muted-2" style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>{label}</div>
