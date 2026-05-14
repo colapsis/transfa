@@ -12,7 +12,7 @@ export default function Footer() {
           </p>
           <div style={{ marginTop: 20, display: 'flex', gap: 8 }}>
             <span className="pill pill-ok"><span className="dot" />all systems normal</span>
-            <span className="pill pill-dead">v1.4.2</span>
+            <span className="pill pill-dead">v1.6.0</span>
           </div>
         </div>
         <div className="footer-col">

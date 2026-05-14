@@ -104,7 +104,7 @@ export default function Docs() {
       <div className="layout-sidebar">
         <aside className="sidebar">
           <div className="docs-sidebar-meta" style={{ marginBottom: 32, padding: '0 10px' }}>
-            <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>docs · v1.4.2</div>
+            <div className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>docs · v1.6.0</div>
             <div style={{ position: 'relative', marginTop: 12 }}>
               <input
                 placeholder="Search docs…"
