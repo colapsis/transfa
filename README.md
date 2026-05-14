@@ -82,6 +82,26 @@ tf delete xK9mRp
 
 ---
 
+## GitHub Actions
+
+Upload build artifacts, coverage reports, and any CI output straight from your workflow:
+
+```yaml
+- uses: colapsis/transfa-action@v1
+  id: upload
+  with:
+    file: ./dist/report.pdf
+    api-key: ${{ secrets.TRANSFA_API_KEY }}
+
+- run: echo "${{ steps.upload.outputs.agent-link }}" >> $GITHUB_STEP_SUMMARY
+```
+
+All five outputs are available after the step: `id`, `agent-link`, `human-link`, `sha256`, `expires-at`.
+
+See [colapsis/transfa-action](https://github.com/colapsis/transfa-action) for the full input reference and more examples (password-protected links, self-hosted instances, single-download limits).
+
+---
+
 ## API
 
 transfa is fully REST. Every operation the CLI does, you can do with `curl` or any HTTP client.

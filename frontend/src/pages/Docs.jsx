@@ -88,7 +88,13 @@ const SECTIONS = [
   { group: 'Getting started', items: [{ id: 'introduction', title: 'Introduction' }, { id: 'installation', title: 'Installation' }, { id: 'quickstart', title: 'Quick start' }] },
   { group: 'CLI reference', items: [{ id: 'cli-upload', title: 'tf upload' }, { id: 'cli-list', title: 'tf list' }, { id: 'cli-fetch', title: 'tf fetch' }, { id: 'cli-rm', title: 'tf rm' }, { id: 'cli-config', title: 'tf config' }] },
   { group: 'API reference', items: [{ id: 'api-auth', title: 'Authentication' }, { id: 'api-upload', title: 'POST /v1/uploads' }, { id: 'api-get', title: 'GET /v1/uploads/:id' }, { id: 'api-list', title: 'GET /v1/uploads' }] },
-  { group: 'Operations', items: [{ id: 'rate-limits', title: 'Rate limits' }, { id: 'errors', title: 'Error codes' }, { id: 'webhooks', title: 'Webhooks' }] },
+  { group: 'Operations', items: [{ id: 'rate-limits', title: 'Rate limits' }, { id: 'errors', title: 'Error codes' }] },
+  { group: 'Integrations', items: [
+    { id: 'github-actions', title: 'GitHub Actions' },
+    { id: 'presigned-upload', title: 'Presigned uploads' },
+    { id: 'pipeline-manifest', title: 'Pipeline manifests' },
+    { id: 'webhooks', title: 'Webhooks' },
+  ]},
 ];
 
 export default function Docs() {
@@ -140,7 +146,7 @@ export default function Docs() {
           ))}
 
           <div className="docs-sidebar-meta" style={{ marginTop: 32, padding: '0 10px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-4)' }}>
-            Last updated 2026-05-11
+            Last updated 2026-05-14
           </div>
         </aside>
 
@@ -269,6 +275,213 @@ export default function Docs() {
               </p>
               <Link className="btn btn-primary btn-sm" to="/docs">MCP integration guide →</Link>
             </div>
+
+            {/* ── 06 · integrations ─────────────────────────────────────────── */}
+
+            <H2 id="github-actions" eyebrow="06 · integrations">GitHub Actions</H2>
+            <P>
+              The official <Mono>colapsis/transfa-action@v1</Mono> action wraps the CLI so you can upload build
+              artifacts, test reports, and model checkpoints directly from a workflow step — no extra tooling required.
+              It streams progress, handles retries on transient errors, and surfaces the download link as a step output
+              and job summary annotation.
+            </P>
+
+            <H3>Workflow example</H3>
+            <CodeWindow title=".github/workflows/ci.yml" lang="yaml">
+              {'jobs:\n'}
+              {'  build:\n'}
+              {'    runs-on: ubuntu-latest\n'}
+              {'    steps:\n'}
+              {'      - uses: actions/checkout@v4\n\n'}
+              {'      - name: Build\n'}
+              {'        run: make dist\n\n'}
+              {'      - name: Upload test artifacts\n'}
+              {'        uses: colapsis/transfa-action@v1\n'}
+              {'        id: upload\n'}
+              {'        with:\n'}
+              {'          file: ./dist/report.pdf\n'}
+              {'          api-key: $\{{ secrets.TRANSFA_API_KEY }}\n'}
+              {'          expires: 7d\n\n'}
+              {'      - name: Post link to PR\n'}
+              {'        run: echo "Report → $\{{ steps.upload.outputs.agent-link }}" >> $GITHUB_STEP_SUMMARY\n'}
+            </CodeWindow>
+
+            <H3>Inputs</H3>
+            <FlagTable
+              title="colapsis/transfa-action@v1 — inputs"
+              rows={[
+                ['file', 'Path to the file to upload (glob not yet supported).', '—'],
+                ['api-key', 'Your transfa API key. Store it as an Actions secret.', '—'],
+                ['expires', 'TTL before the file is purged. Accepts 1h–30d.', '7d'],
+                ['name', 'Override the display filename shown to recipients.', 'file basename'],
+                ['max-downloads', 'Revoke the link after this many downloads.', '∞'],
+                ['password', 'Gate the download link with a password.', '—'],
+                ['base-url', 'Point to a self-hosted instance instead of transfa.sh.', 'https://transfa.sh'],
+              ]}
+            />
+
+            <H3>Outputs</H3>
+            <FlagTable
+              title="colapsis/transfa-action@v1 — outputs"
+              rows={[
+                ['id', 'Short upload ID (e.g. a7f9k2).', '—'],
+                ['agent-link', 'Direct download URL for agents and automation.', '—'],
+                ['human-link', 'Human-readable viewer page (transfa.sh/f/:id).', '—'],
+                ['sha256', 'Hex SHA-256 of the uploaded file.', '—'],
+                ['expires-at', 'ISO 8601 expiry timestamp.', '—'],
+              ]}
+            />
+
+            <P style={{ marginTop: 20 }}>
+              <strong>Self-hosted tip:</strong> set <Mono>base-url</Mono> to your instance origin (e.g.{' '}
+              <Mono>https://files.corp.example.com</Mono>) and the action will route all traffic there instead of
+              transfa.sh. The action validates the TLS certificate, so make sure it is valid.
+            </P>
+
+            <H2 id="presigned-upload" eyebrow="06 · integrations">Presigned uploads</H2>
+            <P>
+              A presigned upload token lets you hand an untrusted client or agent a one-time upload URL without
+              exposing your API key. The server mints a short-lived HMAC-signed token that encodes the TTL, download
+              cap, and intended filename. The token is self-contained — no server state is created at mint time.
+            </P>
+            <P>
+              Typical pattern: your backend mints the token, passes it to the client (browser, CI runner, LLM agent),
+              and the client POSTs the file directly to transfa. Your API key is never visible to the client.
+            </P>
+
+            <H3>Step 1 — mint a token</H3>
+            <CodeWindow title="mint token" copy='curl -X POST https://transfa.sh/api/upload/presigned -H "Authorization: Bearer tf_live_•••" -H "Content-Type: application/json" -d "{\"ttl\":\"24h\",\"max_downloads\":1,\"filename\":\"report.pdf\",\"expires_in\":600}"' lang="bash">
+              <Sh><span className="tok-cmd">curl</span> <span className="tok-flag">-X</span> POST https://transfa.sh/api/upload/presigned \</Sh>{'\n'}
+              {'  '}<span className="tok-flag">-H</span> <span className="tok-str">"Authorization: Bearer tf_live_•••"</span> \{'\n'}
+              {'  '}<span className="tok-flag">-H</span> <span className="tok-str">"Content-Type: application/json"</span> \{'\n'}
+              {'  '}<span className="tok-flag">-d</span> <span className="tok-str">{'\'{"ttl":"24h","max_downloads":1,"filename":"report.pdf","expires_in":600}\''}</span>
+            </CodeWindow>
+            <CodeWindow title="response · 200" lang="json">
+              {'{\n'}
+              {'  "token": '}<span className="tok-str">"eyJ0dGwi…"</span>,{'\n'}
+              {'  "upload_url": '}<span className="tok-str">"https://transfa.sh/api/upload/presigned/eyJ0dGwi…"</span>,{'\n'}
+              {'  "expires_in": '}<span className="tok-num">600</span>,{'\n'}
+              {'  "expires_at": '}<span className="tok-str">"2026-05-14T10:24:00Z"</span>{'\n'}
+              {'}'}
+            </CodeWindow>
+
+            <H3>Step 2 — upload with the token</H3>
+            <P>Pass the <Mono>upload_url</Mono> to the client. The client POSTs the file as multipart with no Authorization header — the token in the URL IS the credential.</P>
+            <CodeWindow title="upload via presigned URL" lang="bash">
+              <Sh><span className="tok-cmd">curl</span> <span className="tok-flag">-X</span> POST <span className="tok-str">"$UPLOAD_URL"</span> \</Sh>{'\n'}
+              {'  '}<span className="tok-flag">-F</span> <span className="tok-str">"file=@report.pdf"</span>
+            </CodeWindow>
+            <P>
+              If the token has expired or the HMAC is invalid the server returns <Mono>401 {'{'}"error":"invalid or expired presigned token"{'}'}</Mono>.
+              All other plan limits (file size, daily upload cap) still apply.
+            </P>
+
+            <H2 id="pipeline-manifest" eyebrow="06 · integrations">Pipeline manifests</H2>
+            <P>
+              Tagging uploads with run metadata lets you retrieve every artifact from a pipeline run in a single
+              request. This is useful for CI pipelines, model training jobs, and any workflow where multiple steps
+              produce files that a downstream consumer needs to collect.
+            </P>
+
+            <H3>Tagging an upload</H3>
+            <P>Add manifest fields to any upload via form fields or <Mono>X-Transfa-*</Mono> headers:</P>
+            <FlagTable
+              title="manifest fields"
+              rows={[
+                ['--run-id=<str>', 'Unique identifier for the pipeline run (e.g. GitHub run ID).', '—'],
+                ['--step=<str>', 'The step or job name that produced this artifact.', '—'],
+                ['--consumer=<str>', 'Downstream service expected to consume this artifact.', '—'],
+                ['--intent=<str>', 'Semantic label, e.g. test-report, model-weights, benchmark.', '—'],
+              ]}
+            />
+            <CodeWindow title="upload with manifest" lang="bash">
+              <Sh><span className="tok-cmd">tf</span> upload dist/weights.ckpt \</Sh>{'\n'}
+              {'  '}<span className="tok-flag">--run-id</span>=<span className="tok-str">$GITHUB_RUN_ID</span> \{'\n'}
+              {'  '}<span className="tok-flag">--step</span>=<span className="tok-str">train</span> \{'\n'}
+              {'  '}<span className="tok-flag">--consumer</span>=<span className="tok-str">eval-agent</span> \{'\n'}
+              {'  '}<span className="tok-flag">--intent</span>=<span className="tok-str">model-weights</span>
+            </CodeWindow>
+
+            <H3>Fetching all artifacts for a run</H3>
+            <CodeWindow title="run manifest" lang="bash">
+              <Sh><span className="tok-cmd">tf</span> run <span className="tok-str">$GITHUB_RUN_ID</span></Sh>{'\n\n'}
+              <span className="tok-c"># or via the REST API:</span>{'\n'}
+              <Sh><span className="tok-cmd">curl</span> https://transfa.sh/api/run/<span className="tok-str">$GITHUB_RUN_ID</span></Sh>
+            </CodeWindow>
+            <CodeWindow title="GET /api/run/:run_id — response · 200" lang="json">
+              {'{\n'}
+              {'  "run_id": '}<span className="tok-str">"12345678"</span>,{'\n'}
+              {'  "total": '}<span className="tok-num">3</span>,{'\n'}
+              {'  "created_at": '}<span className="tok-str">"2026-05-14T08:00:00Z"</span>,{'\n'}
+              {'  "artifacts": [\n'}
+              {'    {\n'}
+              {'      "id": '}<span className="tok-str">"a7f9k2"</span>,{'\n'}
+              {'      "url": '}<span className="tok-str">"https://transfa.sh/f/a7f9k2"</span>,{'\n'}
+              {'      "filename": '}<span className="tok-str">"weights.ckpt"</span>,{'\n'}
+              {'      "step": '}<span className="tok-str">"train"</span>,{'\n'}
+              {'      "consumer": '}<span className="tok-str">"eval-agent"</span>,{'\n'}
+              {'      "intent": '}<span className="tok-str">"model-weights"</span>,{'\n'}
+              {'      "sha256": '}<span className="tok-str">"9f3a…c10e"</span>,{'\n'}
+              {'      "bytes": '}<span className="tok-num">204800000</span>,{'\n'}
+              {'      "expires_at": '}<span className="tok-str">"2026-05-21T08:00:00Z"</span>,{'\n'}
+              {'      "active": '}<span className="tok-num">true</span>{'\n'}
+              {'    }\n'}
+              {'  ]\n'}
+              {'}'}
+            </CodeWindow>
+
+            <H2 id="webhooks" eyebrow="06 · integrations">Webhooks</H2>
+            <P>
+              Configure a webhook URL on your workspace to receive real-time events when something happens to your
+              uploads. Currently the <Mono>upload.downloaded</Mono> event fires on every successful file download.
+            </P>
+
+            <H3>Event payload</H3>
+            <CodeWindow title="upload.downloaded — POST to your endpoint" lang="json">
+              {'{\n'}
+              {'  "event": '}<span className="tok-str">"upload.downloaded"</span>,{'\n'}
+              {'  "timestamp": '}<span className="tok-str">"2026-05-14T09:14:00Z"</span>,{'\n'}
+              {'  "data": {\n'}
+              {'    "upload_id": '}<span className="tok-str">"a7f9k2"</span>,{'\n'}
+              {'    "filename": '}<span className="tok-str">"report.pdf"</span>,{'\n'}
+              {'    "download_count": '}<span className="tok-num">5</span>,{'\n'}
+              {'    "max_downloads": '}<span className="tok-num">10</span>,{'\n'}
+              {'    "downloader_ip": '}<span className="tok-str">"203.0.113.42"</span>,{'\n'}
+              {'    "user_agent": '}<span className="tok-str">"curl/8.4.0"</span>{'\n'}
+              {'  }\n'}
+              {'}'}
+            </CodeWindow>
+
+            <H3>Signature verification</H3>
+            <P>
+              Every webhook request includes an <Mono>X-Transfa-Signature</Mono> header containing an HMAC-SHA256
+              hex digest of the raw request body, keyed with your webhook secret. Always verify this before
+              processing the payload.
+            </P>
+            <CodeWindow title="verify-webhook.js" lang="js">
+              {'const crypto = require(\'crypto\');\n\n'}
+              {'function verifyWebhook(rawBody, signature, secret) {\n'}
+              {'  const expected = crypto\n'}
+              {'    .createHmac(\'sha256\', secret)\n'}
+              {'    .update(rawBody)\n'}
+              {'    .digest(\'hex\');\n'}
+              {'  // Use timingSafeEqual to prevent timing attacks\n'}
+              {'  return crypto.timingSafeEqual(\n'}
+              {'    Buffer.from(expected),\n'}
+              {'    Buffer.from(signature)\n'}
+              {'  );\n'}
+              {'}\n\n'}
+              {'// Express example\n'}
+              {'app.post(\'/webhook\', express.raw({ type: \'*/*\' }), (req, res) => {\n'}
+              {'  const sig = req.headers[\'x-transfa-signature\'];\n'}
+              {'  if (!verifyWebhook(req.body, sig, process.env.TRANSFA_WEBHOOK_SECRET)) {\n'}
+              {'    return res.status(401).send(\'invalid signature\');\n'}
+              {'  }\n'}
+              {'  const event = JSON.parse(req.body);\n'}
+              {'  console.log(\'received:\', event.event, event.data.upload_id);\n'}
+              {'  res.sendStatus(200);\n'}
+              {'});\n'}
+            </CodeWindow>
           </article>
         </main>
       </div>

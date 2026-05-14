@@ -142,6 +142,16 @@ function Hero() {
             <span className="tok-dim">  key saved → ~/.transfa/config.json</span>
           </CodeWindow>
 
+          <CodeWindow title=".github/workflows/ci.yml" lang="yaml" style={{ marginTop: 12 }}>
+            <span className="tok-c"># .github/workflows/ci.yml</span>{'\n'}
+            <span className="tok-dim">- </span><span className="tok-cmd">uses</span>{': '}<span className="tok-str">colapsis/transfa-action@v1</span>{'\n'}
+            {'  '}<span className="tok-cmd">id</span>{': '}<span className="tok-out">upload</span>{'\n'}
+            {'  '}<span className="tok-cmd">with</span>:{'\n'}
+            {'    '}<span className="tok-cmd">file</span>{': '}<span className="tok-str">./dist/report.pdf</span>{'\n'}
+            {'    '}<span className="tok-cmd">api-key</span>{': '}<span className="tok-str">{'${{ secrets.TRANSFA_API_KEY }}'}</span>{'\n'}
+            <span className="tok-dim">- </span><span className="tok-cmd">run</span>{': '}<span className="tok-str">{'echo "${{ steps.upload.outputs.agent-link }}" >> $GITHUB_STEP_SUMMARY'}</span>
+          </CodeWindow>
+
           <div className="mini-stats" style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
             <MiniStat label="no account needed" value="zero auth" />
             <MiniStat label="max file size" value="100 GB" />
@@ -404,8 +414,8 @@ function HowItWorks() {
     {
       n: '03',
       title: 'Hand off the link.',
-      body: 'Recipient gets a signed URL. No login. No tracker. No \'choose a download speed\' screen. Just the file.',
-      code: <><span className="tok-ok">→ Agent Link</span>{'  '}<span className="tok-str">https://transfa.sh/api/download/a7f9k2</span>{'\n'}<span className="tok-dim">→ Human Link  https://transfa.sh/f/a7f9k2</span></>,
+      body: 'Recipient gets a signed URL. No login. No tracker. No \'choose a download speed\' screen. Works from the CLI, CI pipelines, and GitHub Actions.',
+      code: <><span className="tok-ok">→ Agent Link</span>{'  '}<span className="tok-str">https://transfa.sh/api/download/a7f9k2</span>{'\n'}<span className="tok-dim">→ Human Link  https://transfa.sh/f/a7f9k2</span>{'\n'}<span className="tok-c"># or: uses: colapsis/transfa-action@v1</span></>,
     },
   ];
   return (
@@ -441,6 +451,7 @@ function ForAgents() {
     { k: 'Idempotent', v: 'Re-running tf on the same hash returns the existing link instead of re-uploading. Safe to retry, safe to loop.' },
     { k: 'Streaming stdin', v: 'Pipe ffmpeg, postgres dumps, image generators directly. No temp files, no buffering surprises, no OOM.' },
     { k: 'Signed URLs', v: 'HMAC-signed, optionally one-time, optionally password-gated. The link is the auth — share it like a cookie.' },
+    { k: 'GitHub Actions native', v: 'One step uploads any artifact and sets agent-link, human-link, sha256, and expires-at outputs. Post to PR summaries, Slack, or downstream jobs — zero glue.' },
     { k: 'Audit log', v: 'Every download is logged with IP, UA, and exact byte range. Pull it via API or stream to your SIEM.' },
   ];
   return (

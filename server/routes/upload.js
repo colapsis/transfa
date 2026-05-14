@@ -441,6 +441,218 @@ router.patch('/:id/extend', (req, res) => {
   res.json({ id: upload.id, expires_at: new Date(newExpiry * 1000).toISOString() });
 });
 
+// ─── Presigned upload helpers ────────────────────────────────────────────────
+
+const PRESIGN_SECRET = () => process.env.ADMIN_PASSWORD || 'insecure-dev';
+
+function signPresignedToken(payload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', PRESIGN_SECRET())
+    .update(body)
+    .digest('base64url');
+  return body + '.' + sig;
+}
+
+function verifyPresignedToken(token) {
+  const dot = token.lastIndexOf('.');
+  if (dot < 0) return null;
+  const body = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  const expected = crypto.createHmac('sha256', PRESIGN_SECRET())
+    .update(body)
+    .digest('base64url');
+  // Constant-time comparison
+  if (sig.length !== expected.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (!payload.exp || Math.floor(Date.now() / 1000) > payload.exp) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+// POST /api/upload/presigned — generate a short-lived signed upload token (requires Bearer auth)
+router.post('/presigned', (req, res) => {
+  const rawKey = getApiKey(req);
+  const keyRow = resolveKey(rawKey);
+  if (!keyRow) return res.status(401).json({ error: 'invalid api key' });
+
+  const expiresIn = parseInt(req.body.expires_in) || 3600;
+  const now = Math.floor(Date.now() / 1000);
+
+  const payload = {
+    kid: keyRow.id,
+    exp: now + expiresIn,
+  };
+  if (req.body.ttl         !== undefined) payload.ttl           = req.body.ttl;
+  if (req.body.max_downloads !== undefined) payload.max_downloads = req.body.max_downloads;
+  if (req.body.filename    !== undefined) payload.filename      = req.body.filename;
+
+  const token = signPresignedToken(payload);
+  const base = getBaseUrl(req);
+
+  res.json({
+    token,
+    upload_url: `${base}/api/upload/presigned/${token}`,
+    expires_in: expiresIn,
+    expires_at: new Date((now + expiresIn) * 1000).toISOString(),
+  });
+});
+
+// POST /api/upload/presigned/:token — upload a file using a presigned token (no API key required)
+router.post('/presigned/:token', upload.single('file'), async (req, res) => {
+  const payload = verifyPresignedToken(req.params.token);
+  if (!payload) {
+    if (req.file) fs.unlink(req.file.path, () => {});
+    return res.status(401).json({ error: 'invalid or expired presigned token' });
+  }
+
+  // Look up the api_key by kid, verify it is not revoked
+  const keyRow = db.prepare(
+    `SELECT k.*, u.username, u.plan
+     FROM api_keys k LEFT JOIN users u ON k.user_id = u.id
+     WHERE k.id = ? AND k.revoked = 0`
+  ).get(payload.kid);
+
+  if (!keyRow) {
+    if (req.file) fs.unlink(req.file.path, () => {});
+    return res.status(401).json({ error: 'invalid or expired presigned token' });
+  }
+
+  const plan = keyRow.plan || 'free';
+  const limits = getPlanLimits(plan);
+
+  // Reset daily counter if needed
+  const now = Math.floor(Date.now() / 1000);
+  if (now - keyRow.uploads_reset_at > 86400) {
+    db.prepare('UPDATE api_keys SET uploads_today = 0, uploads_reset_at = ? WHERE id = ?').run(now, keyRow.id);
+    keyRow.uploads_today = 0;
+  }
+
+  // Rate limit check (same as normal upload)
+  if (keyRow.uploads_today >= limits.uploads_per_day) {
+    if (req.file) fs.unlinkSync(req.file.path);
+    return res.status(429).json({
+      error: 'daily upload limit reached',
+      limit: limits.uploads_per_day,
+      plan,
+      upgrade_url: 'https://transfa.sh/pricing',
+    });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'no file provided — use multipart/form-data with field "file"' });
+  }
+
+  // File size check
+  if (req.file.size > limits.max_file_size) {
+    fs.unlinkSync(req.file.path);
+    return res.status(413).json({
+      error: 'file too large for your plan',
+      max_bytes: limits.max_file_size,
+      plan,
+    });
+  }
+
+  // TTL — token payload takes priority, then body/header, then default
+  const ttlSeconds = Math.min(
+    parseTTL(payload.ttl || req.body.ttl || req.headers['x-transfa-ttl'] || '7d'),
+    limits.max_ttl_seconds
+  );
+  const expiresAt = now + ttlSeconds;
+
+  // SHA-256
+  let sha256;
+  try {
+    sha256 = await hashFile(req.file.path);
+  } catch (e) {
+    fs.unlink(req.file.path, () => {});
+    return res.status(500).json({ error: 'failed to process upload' });
+  }
+
+  const passwordHash = req.body.password
+    ? crypto.createHash('sha256').update(String(req.body.password)).digest('hex')
+    : null;
+
+  // Idempotency: same key + same sha256 + same password → return existing upload
+  const existing = db.prepare(
+    `SELECT * FROM uploads
+     WHERE api_key_id = ? AND sha256 = ? AND deleted_at IS NULL AND expires_at > ?
+     AND password_hash IS ?`
+  ).get(keyRow.id, sha256, now, passwordHash);
+
+  if (existing) {
+    fs.unlinkSync(req.file.path);
+    db.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(now, keyRow.id);
+    const base = getBaseUrl(req);
+    return res.json({
+      id: existing.id,
+      download_url: `${base}/api/download/${existing.id}`,
+      url: `${base}/f/${existing.id}`,
+      filename: existing.original_filename,
+      bytes: existing.size,
+      sha256: existing.sha256,
+      created_at: new Date(existing.created_at * 1000).toISOString(),
+      expires_at: new Date(existing.expires_at * 1000).toISOString(),
+      download_count: existing.download_count,
+      idempotent: true,
+    });
+  }
+
+  const uploadId = nanoid(6);
+  // filename: token payload → form field → header → original name
+  const originalFilename = payload.filename || req.body.filename || req.headers['x-transfa-filename'] || req.file.originalname;
+  const mimeType = detectMime(originalFilename);
+
+  // Manifest fields
+  const runId    = req.body.run_id    || req.headers['x-transfa-run-id']   || null;
+  const step     = req.body.step      || req.headers['x-transfa-step']     || null;
+  const consumer = req.body.consumer  || req.headers['x-transfa-consumer'] || null;
+  const intent   = req.body.intent    || req.headers['x-transfa-intent']   || null;
+
+  const maxDownloads = payload.max_downloads !== undefined
+    ? parseInt(payload.max_downloads) || null
+    : (req.body.max_downloads ? parseInt(req.body.max_downloads) : null);
+
+  db.prepare(
+    `INSERT INTO uploads (id, api_key_id, filename, original_filename, size, sha256, mime_type, storage_path, expires_at, uploader_name, max_downloads, password_hash, run_id, step, consumer, intent)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    uploadId, keyRow.id, req.file.filename, originalFilename,
+    req.file.size, sha256, mimeType,
+    req.file.path, expiresAt,
+    keyRow.username || null,
+    maxDownloads,
+    passwordHash,
+    runId, step, consumer, intent
+  );
+
+  db.prepare('UPDATE api_keys SET uploads_today = uploads_today + 1, last_used_at = ? WHERE id = ?').run(now, keyRow.id);
+
+  const base = getBaseUrl(req);
+  const response = {
+    id: uploadId,
+    download_url: `${base}/api/download/${uploadId}`,
+    url: `${base}/f/${uploadId}`,
+    filename: originalFilename,
+    bytes: req.file.size,
+    sha256,
+    created_at: new Date(now * 1000).toISOString(),
+    expires_at: new Date(expiresAt * 1000).toISOString(),
+    download_count: 0,
+  };
+  if (runId)    response.run_id   = runId;
+  if (step)     response.step     = step;
+  if (consumer) response.consumer = consumer;
+  if (intent)   response.intent   = intent;
+
+  res.status(201).json(response);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // DELETE /api/upload/:id
 router.delete('/:id', (req, res) => {
   const rawKey = getApiKey(req);
