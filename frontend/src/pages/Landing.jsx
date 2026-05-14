@@ -312,11 +312,11 @@ function HeroUpload() {
 
             {/* links */}
             {[
-              { key: 'agent', label: '→ agent', url: result.download_url, dim: false },
-              { key: 'share', label: '→ share', url: result.url, dim: true },
+              { key: 'agent', label: '→ Agent Link', url: result.download_url, dim: false },
+              { key: 'share', label: '→ Human Link', url: result.url, dim: true },
             ].map(({ key, label, url, dim }) => (
               <div key={key} style={{ padding: '14px 28px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12, background: dim ? 'transparent' : 'var(--bg)' }}>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: dim ? 'var(--text-3)' : 'var(--ok)', minWidth: 60 }}>{label}</span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: dim ? 'var(--text-3)' : 'var(--ok)', minWidth: 90 }}>{label}</span>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: dim ? 'var(--text-2)' : 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</span>
                 <button
                   onClick={() => copy(key, url)}
