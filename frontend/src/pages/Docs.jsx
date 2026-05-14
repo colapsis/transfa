@@ -86,9 +86,10 @@ function RateTable() {
 
 const SECTIONS = [
   { group: 'Getting started', items: [{ id: 'introduction', title: 'Introduction' }, { id: 'installation', title: 'Installation' }, { id: 'quickstart', title: 'Quick start' }] },
-  { group: 'CLI reference', items: [{ id: 'cli-upload', title: 'tf upload' }, { id: 'cli-list', title: 'tf list' }, { id: 'cli-fetch', title: 'tf fetch' }, { id: 'cli-rm', title: 'tf rm' }, { id: 'cli-config', title: 'tf config' }] },
+  { group: 'CLI reference', items: [{ id: 'cli-upload', title: 'tf upload' }, { id: 'cli-list', title: 'tf list' }, { id: 'cli-fetch', title: 'tf fetch' }, { id: 'cli-rm', title: 'tf rm' }, { id: 'cli-download', title: 'tf download' }, { id: 'cli-config', title: 'tf config' }] },
   { group: 'API reference', items: [{ id: 'api-auth', title: 'Authentication' }, { id: 'api-upload', title: 'POST /v1/uploads' }, { id: 'api-get', title: 'GET /v1/uploads/:id' }, { id: 'api-list', title: 'GET /v1/uploads' }] },
   { group: 'Operations', items: [{ id: 'rate-limits', title: 'Rate limits' }, { id: 'errors', title: 'Error codes' }] },
+  { group: 'Security', items: [{ id: 'security-model', title: 'Security model' }, { id: 'security-verification', title: 'Integrity verification' }] },
   { group: 'Integrations', items: [
     { id: 'github-actions', title: 'GitHub Actions' },
     { id: 'presigned-upload', title: 'Presigned uploads' },
@@ -217,6 +218,7 @@ export default function Docs() {
                 ['--password=<s>', 'Gate the link with a password.', '—'],
                 ['--max=<n>', 'Maximum download count before the link locks.', '∞'],
                 ['--once', 'Shortcut for --max=1.', 'off'],
+                ['--grace=<dur>', 'Grace period after expiry — file stays downloadable this long after TTL ends (useful for delayed pipeline steps).', '0'],
                 ['--json', 'Emit structured JSON instead of progress UI.', 'off'],
                 ['--quiet', 'Print the URL and nothing else.', 'off'],
               ]}
@@ -229,6 +231,29 @@ export default function Docs() {
               <span className="tok-out">  a7f9k2     dataset.parquet     2.4 GB     3h      6d 21h   4</span>{'\n'}
               <span className="tok-out">  m1x8qz     screenshots.zip     412 MB     1d      6d       17</span>{'\n'}
               <span className="tok-out">  b2c4vd     run.json            8.4 KB     2d      5d       1</span>
+            </CodeWindow>
+
+            <H2 id="cli-download" eyebrow="02 · cli reference">tf download</H2>
+            <P>Download a file by ID and verify its integrity. SHA-256 verification runs by default — the download fails loudly if the hash doesn't match, protecting against silent corruption in pipelines.</P>
+
+            <FlagTable
+              title="tf download <id>"
+              rows={[
+                ['--output=<path>', 'Save to this path instead of the original filename.', '(original name)'],
+                ['--verify', 'Verify SHA-256 after download — exits 2 on mismatch.', 'true'],
+                ['--no-verify', 'Skip integrity check.', '—'],
+                ['--password=<pw>', 'Password for protected files.', '—'],
+                ['--json', 'Machine-readable output.', '—'],
+              ]}
+            />
+
+            <CodeWindow title="~ — zsh" lang="bash">
+              <Sh><span className="tok-cmd">tf</span> download a7f9k2</Sh>{'\n'}
+              <span className="tok-out">  ↓ model.pt  847.2 MB</span>{'\n'}
+              <span className="tok-out">  sha256    9f3a...c10e</span>{'\n\n'}
+              <span className="tok-out">  downloading  847.2 MB  ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰  100%</span>{'\n\n'}
+              <span className="tok-ok">  ✓ verified  sha256:9f3a8c1d...</span>{'\n'}
+              <span className="tok-out">  saved to  model.pt</span>
             </CodeWindow>
 
             <H2 id="api-auth" eyebrow="04 · API">API reference</H2>
@@ -481,6 +506,47 @@ export default function Docs() {
               {'  console.log(\'received:\', event.event, event.data.upload_id);\n'}
               {'  res.sendStatus(200);\n'}
               {'});\n'}
+            </CodeWindow>
+
+            {/* ── 07 · security ─────────────────────────────────────────────── */}
+
+            <H2 id="security-model" eyebrow="07 · security">Security model</H2>
+            <P>Every transfa link provides three things:</P>
+            <ul style={{ fontSize: 15, lineHeight: 1.65, color: 'var(--text-2)', paddingLeft: 24, margin: '0 0 14px', maxWidth: '70ch' }}>
+              <li style={{ marginBottom: 8 }}><strong>Content integrity</strong> — SHA-256 is computed on every upload, returned in the JSON response body, and exposed as the <Mono>X-Transfa-SHA256</Mono> response header on every download.</li>
+              <li style={{ marginBottom: 8 }}><strong>Optional access control</strong> — password-gating via <Mono>--password</Mono> requires the recipient to supply the correct passphrase before the download proceeds.</li>
+              <li style={{ marginBottom: 8 }}><strong>Hard TTL</strong> — files are purged from object storage at expiry; the URL returns <Mono>410 Gone</Mono> permanently afterwards.</li>
+            </ul>
+            <P>What a transfa link does <em>not</em> provide:</P>
+            <ul style={{ fontSize: 15, lineHeight: 1.65, color: 'var(--text-2)', paddingLeft: 24, margin: '0 0 14px', maxWidth: '70ch' }}>
+              <li style={{ marginBottom: 8 }}><strong>No identity verification on the downloader</strong> — anyone who holds the URL can download the file. The link is the credential.</li>
+              <li style={{ marginBottom: 8 }}><strong>No end-to-end encryption by default</strong> — files are encrypted at rest in object storage, but the server can read plaintext. Use <Mono>tf --encrypt</Mono> for client-side encryption.</li>
+            </ul>
+            <P>
+              This model is well-suited for internal pipelines, ephemeral build artifacts, and dev-to-staging handoffs where the risk profile is low and convenience matters. It is not a substitute for identity-based ACLs on regulated or sensitive data — for those cases, layer your own access controls on top or use the password gate combined with out-of-band key distribution.
+            </P>
+
+            <H2 id="security-verification" eyebrow="07 · security">Integrity verification</H2>
+            <P>
+              <Mono>tf download --verify</Mono> (on by default) streams the file, computes SHA-256 incrementally, and compares the result against the hash recorded by the server at upload time. If they don't match, the command exits with code <Mono>2</Mono> and prints a clear error — the saved file is also deleted to prevent silent use of a corrupt artifact.
+            </P>
+            <CodeWindow title="~ — zsh" lang="bash">
+              <Sh><span className="tok-cmd">tf</span> download a7f9k2 <span className="tok-flag">--verify</span></Sh>{'\n'}
+              <span className="tok-ok">  ✓ verified  sha256:9f3a8c1d…</span>{'\n\n'}
+              <span className="tok-c"># skip verification (not recommended in automated pipelines)</span>{'\n'}
+              <Sh><span className="tok-cmd">tf</span> download a7f9k2 <span className="tok-flag">--no-verify</span></Sh>
+            </CodeWindow>
+            <P style={{ marginTop: 24 }}>
+              When using the API directly, check the <Mono>X-Transfa-SHA256</Mono> response header and compare it against your own computed hash:
+            </P>
+            <CodeWindow title="curl + sha256sum" lang="bash">
+              <span className="tok-c"># download and capture the server hash in one step</span>{'\n'}
+              <Sh><span className="tok-cmd">curl</span> <span className="tok-flag">-sD</span> headers.txt https://transfa.sh/api/download/a7f9k2 <span className="tok-flag">-o</span> model.pt</Sh>{'\n\n'}
+              <span className="tok-c"># extract the server-recorded hash</span>{'\n'}
+              <Sh>SERVER_HASH=$(<span className="tok-cmd">grep</span> <span className="tok-flag">-i</span> <span className="tok-str">'x-transfa-sha256'</span> headers.txt | <span className="tok-cmd">awk</span> <span className="tok-str">{'"{print $2}"'}</span> | <span className="tok-cmd">tr</span> <span className="tok-flag">-d</span> <span className="tok-str">'\\r'</span>)</Sh>{'\n\n'}
+              <span className="tok-c"># compute local hash and compare</span>{'\n'}
+              <Sh>LOCAL_HASH=$(<span className="tok-cmd">sha256sum</span> model.pt | <span className="tok-cmd">awk</span> <span className="tok-str">{'"{print $1}"'}</span>)</Sh>{'\n'}
+              <Sh>[[ <span className="tok-str">"$SERVER_HASH"</span> == <span className="tok-str">"$LOCAL_HASH"</span> ]] && <span className="tok-cmd">echo</span> <span className="tok-str">"✓ verified"</span> || (<span className="tok-cmd">echo</span> <span className="tok-str">"✗ hash mismatch"</span>; <span className="tok-cmd">exit</span> 2)</Sh>
             </CodeWindow>
           </article>
         </main>

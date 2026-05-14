@@ -6,7 +6,8 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 const os = require('os');
-const { createReadStream, statSync } = require('fs');
+const crypto = require('crypto');
+const { createReadStream, createWriteStream, statSync } = require('fs');
 
 const CONFIG_DIR = path.join(os.homedir(), '.transfa');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
@@ -111,6 +112,7 @@ async function upload(filePath, opts) {
   if (opts.name) form.append('filename', opts.name);
   if (opts.max) form.append('max_downloads', String(opts.max));
   if (opts.once) form.append('max_downloads', '1');
+  if (opts.grace)    form.append('grace',    opts.grace);
   if (opts.runId)    form.append('run_id',   opts.runId);
   if (opts.step)     form.append('step',     opts.step);
   if (opts.consumer) form.append('consumer', opts.consumer);
@@ -211,6 +213,124 @@ async function upload(filePath, opts) {
                     `echo "${agentUrl}" | xclip -selection clipboard 2>/dev/null || echo "${agentUrl}" | xsel --clipboard --input 2>/dev/null`;
     require('child_process').execSync(clipCmd, { stdio: 'ignore' });
   } catch {}
+}
+
+// ─── Stream download helper ───
+function streamDownload(urlStr, destPath, totalBytes, password) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(urlStr);
+    if (password) urlObj.searchParams.set('password', password);
+    const lib = urlObj.protocol === 'https:' ? https : http;
+    const hash = crypto.createHash('sha256');
+    let bytesReceived = 0;
+
+    const interval = setInterval(() => {
+      if (totalBytes > 0) {
+        const pct = Math.min(bytesReceived / totalBytes, 0.99);
+        process.stdout.write(`\r  downloading  ${formatBytes(bytesReceived)}  ${progressBar(pct)}  ${(pct * 100).toFixed(0)}%`);
+      }
+    }, 150);
+
+    lib.get(urlObj, (res) => {
+      clearInterval(interval);
+      if (res.statusCode === 401) return reject(new Error('password required — use --password=<pw>'));
+      if (res.statusCode === 403) return reject(new Error('invalid password'));
+      if (res.statusCode === 410) return reject(new Error('link expired'));
+      if (res.statusCode !== 200) return reject(new Error(`server returned ${res.statusCode}`));
+
+      const out = createWriteStream(destPath);
+      res.on('data', chunk => {
+        hash.update(chunk);
+        bytesReceived += chunk.length;
+      });
+      res.pipe(out);
+      out.on('finish', () => {
+        process.stdout.write('\r' + ' '.repeat(72) + '\r');
+        resolve({ bytesReceived, sha256: hash.digest('hex') });
+      });
+      out.on('error', reject);
+      res.on('error', reject);
+    }).on('error', (e) => { clearInterval(interval); reject(e); });
+  });
+}
+
+// ─── Download command ───
+async function download(id, opts) {
+  const config = loadConfig();
+  const apiBase = config.api_base || DEFAULT_API;
+
+  // Fetch metadata first
+  const infoRes = await request(`${apiBase}/api/download/info/${id}`, { method: 'GET' });
+  if (infoRes.status === 404) {
+    console.error(`  error: upload "${id}" not found`);
+    process.exit(1);
+  }
+  if (infoRes.status !== 200) {
+    console.error('  error:', infoRes.body?.error || infoRes.status);
+    process.exit(1);
+  }
+
+  const meta = infoRes.body;
+
+  if (meta.expired && !meta.in_grace) {
+    console.error(`  error: link expired at ${meta.expires_at}`);
+    process.exit(1);
+  }
+
+  if (meta.has_password && !opts.password) {
+    console.error('  error: this file is password-protected — use --password=<pw>');
+    process.exit(1);
+  }
+
+  const destPath = opts.output || opts.o || meta.filename;
+
+  if (!opts.quiet && !opts.json) {
+    console.log('');
+    console.log(`  ↓ ${meta.filename}  ${formatBytes(meta.bytes)}`);
+    if (meta.sha256) console.log(`  sha256    ${meta.sha256}`);
+    if (meta.in_grace) console.log(`  \x1b[33m! in grace period — link nominally expired but file still available\x1b[0m`);
+    console.log(`  output    ${destPath}`);
+    console.log('');
+  }
+
+  const downloadUrl = `${apiBase}/api/download/${id}`;
+  let result;
+  try {
+    result = await streamDownload(downloadUrl, destPath, meta.bytes, opts.password);
+  } catch (e) {
+    try { fs.unlinkSync(destPath); } catch {}
+    console.error(`  error: ${e.message}`);
+    process.exit(1);
+  }
+
+  // Verify integrity — on by default, skipped with --no-verify
+  const shouldVerify = opts.verify !== false && opts['no-verify'] !== true;
+  if (shouldVerify && meta.sha256) {
+    if (result.sha256 === meta.sha256) {
+      if (!opts.quiet && !opts.json) {
+        console.log(`  \x1b[32m✓ verified\x1b[0m  sha256:${result.sha256.slice(0, 8)}...${result.sha256.slice(-4)}`);
+      }
+    } else {
+      console.error('  \x1b[31m✗ hash mismatch — file may be corrupted!\x1b[0m');
+      console.error(`  expected  ${meta.sha256}`);
+      console.error(`  got       ${result.sha256}`);
+      try { fs.unlinkSync(destPath); } catch {}
+      process.exit(2);
+    }
+  }
+
+  if (opts.json) {
+    console.log(JSON.stringify({
+      id, filename: meta.filename, bytes: result.bytesReceived,
+      sha256: result.sha256, verified: meta.sha256 === result.sha256,
+      output: destPath,
+    }));
+    return;
+  }
+
+  if (!opts.quiet) {
+    console.log(`  saved to  ${destPath}\n`);
+  }
 }
 
 // ─── Run command ───
@@ -670,6 +790,7 @@ function help() {
 
 \x1b[1mUsage:\x1b[0m
   tf upload <file>          upload a file and get a shareable link
+  tf download <id>          download a file and verify its SHA-256
   tf run <run-id>           show all artifacts for a pipeline run
   tf watch <id>             tail download events for an upload in real time
   tf url <id>               print share + download URLs for an upload
@@ -685,6 +806,7 @@ function help() {
 
 \x1b[1mUpload flags:\x1b[0m
   --expires=<dur>       TTL (e.g. 24h, 7d, 30d). Default: 7d
+  --grace=<dur>         Grace period after expiry — file stays downloadable this long (e.g. 24h)
   --name=<str>          override filename shown to recipient
   --max=<n>             max download count
   --once                shortcut for --max=1
@@ -696,14 +818,22 @@ function help() {
   --json                output machine-parseable JSON
   --quiet               print URLs and nothing else
 
+\x1b[1mDownload flags:\x1b[0m
+  --output=<path>       save to this path (default: original filename)
+  --no-verify           skip SHA-256 integrity check (verification is on by default)
+  --password=<pw>       password for protected files
+  --json                machine-readable output
+
 \x1b[1mExamples:\x1b[0m
-  tf auth                                          # show current key or generate a free one
+  tf auth                                              # show current key or generate a free one
   tf upload dataset.parquet
-  tf upload model.pt --expires=24h --json
+  tf upload model.pt --expires=24h --grace=12h --json
   tf upload report.pdf --once --quiet
   tf upload weights.pt --run-id=run-42 --step=train --intent=checkpoint
-  tf run run-42                                    # show all artifacts for run-42
-  tf watch a7f9k2                                  # live-tail downloads on that file
+  tf download a7f9k2                                   # download + verify SHA-256
+  tf download a7f9k2 --output=/tmp/model.pt            # save to specific path
+  tf run run-42                                        # show all artifacts for run-42
+  tf watch a7f9k2                                      # live-tail downloads on that file
   cat data.json | tf upload - --name=output.json
 
 \x1b[2mConfig: ${CONFIG_FILE}\x1b[0m
@@ -737,6 +867,15 @@ switch (cmd) {
     const file = positional[0];
     if (!file) { console.error('  usage: transfa upload <file>'); process.exit(1); }
     upload(file, opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
+    break;
+  }
+  case 'download':
+  case 'dl':
+  case 'get':
+  case 'fetch': {
+    const id = positional[0];
+    if (!id) { console.error('  usage: tf download <id>'); process.exit(1); }
+    download(id, opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
     break;
   }
   case 'run': {

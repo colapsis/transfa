@@ -18,7 +18,10 @@ router.get('/:id', (req, res) => {
     return res.status(404).json({ error: 'not found' });
   }
 
-  if (upload.expires_at <= now) {
+  const graceSeconds = upload.grace_seconds || 0;
+  const effectiveExpiry = upload.expires_at + graceSeconds;
+
+  if (effectiveExpiry <= now) {
     return res.status(410).json({ error: 'link expired', expired_at: new Date(upload.expires_at * 1000).toISOString() });
   }
 
@@ -43,12 +46,17 @@ router.get('/:id', (req, res) => {
 
   const filename = upload.original_filename.replace(/[\r\n"\\]/g, '_');
   const mimeType = (upload.mime_type || 'application/octet-stream').replace(/[\r\n]/g, '');
+  const inGrace = graceSeconds > 0 && upload.expires_at <= now;
 
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
   res.setHeader('Content-Type', mimeType);
   res.setHeader('Content-Length', upload.size);
   res.setHeader('X-Transfa-SHA256', upload.sha256 || '');
   res.setHeader('X-Transfa-Expires', new Date(upload.expires_at * 1000).toISOString());
+  if (inGrace) {
+    res.setHeader('X-Transfa-In-Grace', 'true');
+    res.setHeader('X-Transfa-Grace-Expires', new Date(effectiveExpiry * 1000).toISOString());
+  }
 
   // Start streaming immediately, then log — avoids blocking stream start on DB writes
   const stream = fs.createReadStream(upload.storage_path);
@@ -96,14 +104,17 @@ router.get('/info/:id', (req, res) => {
     `SELECT u.id, u.original_filename, u.size, u.sha256, u.mime_type,
             u.download_count, u.max_downloads, u.expires_at, u.created_at,
             u.uploader_name, u.deleted_at, u.password_hash,
-            u.run_id, u.step, u.consumer, u.intent
+            u.run_id, u.step, u.consumer, u.intent, u.grace_seconds
      FROM uploads u WHERE u.id = ?`
   ).get(req.params.id);
 
   if (!upload) return res.status(404).json({ error: 'not found', code: 'NOT_FOUND' });
   if (upload.deleted_at) return res.status(410).json({ error: 'deleted', code: 'DELETED' });
 
-  const expired = upload.expires_at <= now;
+  const infoGrace = upload.grace_seconds || 0;
+  const infoEffectiveExpiry = upload.expires_at + infoGrace;
+  const expired = infoEffectiveExpiry <= now;
+  const inGracePeriod = infoGrace > 0 && upload.expires_at <= now && infoEffectiveExpiry > now;
 
   // last download time
   const lastDl = db.prepare(
@@ -123,8 +134,10 @@ router.get('/info/:id', (req, res) => {
     created_at: new Date(upload.created_at * 1000).toISOString(),
     uploader_name: upload.uploader_name,
     expired,
+    in_grace: inGracePeriod,
     active: !expired && !upload.deleted_at,
     last_download_at: lastDl ? new Date(lastDl.downloaded_at * 1000).toISOString() : null,
+    ...(infoGrace > 0  && { grace_seconds: infoGrace, grace_expires_at: new Date(infoEffectiveExpiry * 1000).toISOString() }),
     ...(upload.run_id    && { run_id:   upload.run_id }),
     ...(upload.step      && { step:     upload.step }),
     ...(upload.consumer  && { consumer: upload.consumer }),

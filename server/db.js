@@ -82,6 +82,9 @@ db.exec(`
 for (const col of ['run_id TEXT', 'step TEXT', 'consumer TEXT', 'intent TEXT']) {
   try { db.exec(`ALTER TABLE uploads ADD COLUMN ${col}`); } catch { /* already exists */ }
 }
+
+// Grace period — seconds the file stays downloadable after expires_at
+try { db.exec('ALTER TABLE uploads ADD COLUMN grace_seconds INTEGER NOT NULL DEFAULT 0'); } catch { /* already exists */ }
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_uploads_run ON uploads(run_id)'); } catch { /* already exists */ }
 
 // Webhook endpoints table

@@ -57,7 +57,12 @@ const LANDING_JSON_LD = {
         {
           '@type': 'Question',
           name: 'How is this different from S3 presigned URLs?',
-          acceptedAnswer: { '@type': 'Answer', text: 'Presigned URLs are a primitive. Transfa is the product: short URLs, automatic content-type detection, virus scanning, audit log, password gating, MCP server, idempotency, and a CLI that pipes. You can build it yourself; you probably shouldn\'t.' },
+          acceptedAnswer: { '@type': 'Answer', text: 'Presigned URLs are a primitive — you still need to handle signing, IAM, SDK setup, content-type detection, audit logging, and distribution. Transfa is the assembled product. If you already have S3 wired into your pipeline, keep it. If you\'re in a fresh environment or writing an agent that needs to pass files between steps, one `npm install` beats fifteen minutes of IAM policy debugging.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'Is a transfa link actually secure?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Honest answer: it depends on what you mean. The link provides content integrity (SHA-256), optional access control (password), and a hard TTL. It does not provide identity verification on the receiving end — anyone with the URL can download. For internal pipelines, ephemeral artifacts, and dev-to-staging handoffs, that\'s usually fine. For regulated data or anything where you need to know who fetched it, layer your own ACLs on top or use the password gate.' },
         },
         {
           '@type': 'Question',
@@ -589,7 +594,8 @@ function FAQ() {
   const qs = [
     { q: 'Is the agent the recipient or the sender?', a: 'Both. Most teams use transfa to let agents publish artifacts (build outputs, screenshots, dataset slices) for humans, and to let agents fetch large inputs that don\'t fit in a context window. The CLI works identically either direction.' },
     { q: 'What happens after a link expires?', a: 'The file is purged from object storage and the share record is sealed. The URL returns 410 Gone, not 404 — so your agent can distinguish \'this never existed\' from \'this is past TTL\' and react accordingly.' },
-    { q: 'How is this different from S3 presigned URLs?', a: 'Presigned URLs are a primitive. Transfa is the product: short URLs, automatic content-type detection, virus scanning, audit log, password gating, MCP server, idempotency, and a CLI that pipes. You can build it yourself; you probably shouldn\'t.' },
+    { q: 'How is this different from S3 presigned URLs?', a: 'Presigned URLs are a primitive — you still need to handle signing, IAM, SDK setup, content-type detection, audit logging, and distribution. Transfa is the assembled product. If you already have S3 wired into your pipeline, keep it. If you\'re in a fresh environment or writing an agent that needs to pass files between steps, one `npm install` beats fifteen minutes of IAM policy debugging.' },
+    { q: 'Is a transfa link actually secure?', a: 'Honest answer: it depends on what you mean. The link provides content integrity (SHA-256), optional access control (password), and a hard TTL. It does not provide identity verification on the receiving end — anyone with the URL can download. For internal pipelines, ephemeral artifacts, and dev-to-staging handoffs, that\'s usually fine. For regulated data or anything where you need to know who fetched it, layer your own ACLs on top or use the password gate.' },
     { q: 'Can I self-host?', a: 'Yes. Team plan ships a Docker image and Helm chart. State lives in Postgres + S3-compatible storage (R2, B2, MinIO). No phone-home.' },
     { q: 'Do you scan files?', a: 'Every upload runs through ClamAV before the link is published. Suspicious files are quarantined and the uploader is notified. We do not read file contents for any other purpose.' },
     { q: 'What about end-to-end encryption?', a: 'Opt-in. tf --encrypt generates a passphrase, encrypts client-side with age, and embeds the key in the URL fragment. Our servers never see the plaintext or the key.' },

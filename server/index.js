@@ -85,7 +85,7 @@ if (isWorkerZero) {
   cron.schedule('0 2 * * *', () => {
     const now = Math.floor(Date.now() / 1000);
     const expired = db.prepare(
-      'SELECT id, storage_path FROM uploads WHERE expires_at <= ? AND deleted_at IS NULL'
+      'SELECT id, storage_path FROM uploads WHERE expires_at + COALESCE(grace_seconds, 0) <= ? AND deleted_at IS NULL'
     ).all(now);
     let purged = 0;
     for (const row of expired) {
