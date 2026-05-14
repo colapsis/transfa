@@ -78,4 +78,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_uploads_active ON uploads(api_key_id, deleted_at, expires_at);
 `);
 
+// Manifest columns — added after initial schema so existing DBs migrate cleanly
+for (const col of ['run_id TEXT', 'step TEXT', 'consumer TEXT', 'intent TEXT']) {
+  try { db.exec(`ALTER TABLE uploads ADD COLUMN ${col}`); } catch { /* already exists */ }
+}
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_uploads_run ON uploads(run_id)'); } catch { /* already exists */ }
+
 module.exports = db;

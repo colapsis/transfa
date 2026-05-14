@@ -111,6 +111,10 @@ async function upload(filePath, opts) {
   if (opts.name) form.append('filename', opts.name);
   if (opts.max) form.append('max_downloads', String(opts.max));
   if (opts.once) form.append('max_downloads', '1');
+  if (opts.runId)    form.append('run_id',   opts.runId);
+  if (opts.step)     form.append('step',     opts.step);
+  if (opts.consumer) form.append('consumer', opts.consumer);
+  if (opts.intent)   form.append('intent',   opts.intent);
 
   const headers = { ...form.getHeaders() };
   if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
@@ -170,8 +174,12 @@ async function upload(filePath, opts) {
 
   if (!opts.quiet) {
     console.log(`  uploading  ${formatBytes(size)}  ${progressBar(1)}  100%   18.2 MB/s`);
-    if (data.sha256) console.log(`  signed     sha256:${data.sha256.slice(0, 4)}…${data.sha256.slice(-4)}`);
+    if (data.sha256) console.log(`  signed     sha256:${data.sha256.slice(0, 4)}...${data.sha256.slice(-4)}`);
     console.log(`  expires    ${data.expires_at}`);
+    if (data.run_id)   console.log(`  run        ${data.run_id}`);
+    if (data.step)     console.log(`  step       ${data.step}`);
+    if (data.consumer) console.log(`  consumer   ${data.consumer}`);
+    if (data.intent)   console.log(`  intent     ${data.intent}`);
     if (data.api_key) {
       console.log(`\n  api key auto-generated (save this):`);
       console.log(`  ${data.api_key}`);
@@ -203,6 +211,50 @@ async function upload(filePath, opts) {
                     `echo "${agentUrl}" | xclip -selection clipboard 2>/dev/null || echo "${agentUrl}" | xsel --clipboard --input 2>/dev/null`;
     require('child_process').execSync(clipCmd, { stdio: 'ignore' });
   } catch {}
+}
+
+// ─── Run command ───
+async function run(runId, opts) {
+  const config = loadConfig();
+  const apiBase = config.api_base || DEFAULT_API;
+
+  const res = await request(`${apiBase}/api/run/${encodeURIComponent(runId)}`, {
+    method: 'GET',
+    headers: config.api_key ? { Authorization: 'Bearer ' + config.api_key } : {},
+  });
+
+  if (res.status === 404) {
+    console.error(`  error: run "${runId}" not found`);
+    process.exit(1);
+  }
+  if (res.status !== 200) {
+    console.error('  error:', res.body?.error || res.status);
+    process.exit(1);
+  }
+
+  const d = res.body;
+
+  if (opts.json) {
+    console.log(JSON.stringify(d, null, 2));
+    return;
+  }
+
+  console.log('');
+  console.log(`  run_id   ${d.run_id}`);
+  console.log(`  total    ${d.total} artifact${d.total !== 1 ? 's' : ''}`);
+  if (d.created_at) console.log(`  started  ${d.created_at}`);
+  console.log('');
+  for (const a of d.artifacts) {
+    const exp = expiresIn(a.expires_at);
+    const name = (a.filename || '').slice(0, 36);
+    console.log(`  \x1b[32m→\x1b[0m ${a.id}  ${name}`);
+    if (a.step)     console.log(`    step       ${a.step}`);
+    if (a.consumer) console.log(`    consumer   ${a.consumer}`);
+    if (a.intent)   console.log(`    intent     ${a.intent}`);
+    console.log(`    size       ${formatBytes(a.bytes)}   expires ${exp}   dl ${a.download_count}`);
+    console.log(`    \x1b[2m${a.download_url}\x1b[0m`);
+  }
+  console.log('');
 }
 
 // ─── Auth command ───
@@ -567,6 +619,7 @@ function help() {
 
 \x1b[1mUsage:\x1b[0m
   tf upload <file>          upload a file and get a shareable link
+  tf run <run-id>           show all artifacts for a pipeline run
   tf url <id>               print share + download URLs for an upload
   tf list                   list your uploads (--urls to show links)
   tf rm <id>                delete an upload
@@ -579,19 +632,25 @@ function help() {
   tf config [key] [value]   view or set config
 
 \x1b[1mUpload flags:\x1b[0m
-  --expires=<dur>    TTL (e.g. 24h, 7d, 30d). Default: 7d
-  --name=<str>       override filename shown to recipient
-  --max=<n>          max download count
-  --once             shortcut for --max=1
-  --password=<str>   password-protect the link
-  --json             output machine-parseable JSON
-  --quiet            print URLs and nothing else
+  --expires=<dur>       TTL (e.g. 24h, 7d, 30d). Default: 7d
+  --name=<str>          override filename shown to recipient
+  --max=<n>             max download count
+  --once                shortcut for --max=1
+  --password=<str>      password-protect the link
+  --run-id=<str>        group this upload under a pipeline run ID
+  --step=<str>          pipeline step name (e.g. preprocess, train)
+  --consumer=<str>      who/what will consume this artifact
+  --intent=<str>        why this file exists (e.g. checkpoint, report)
+  --json                output machine-parseable JSON
+  --quiet               print URLs and nothing else
 
 \x1b[1mExamples:\x1b[0m
-  tf auth                        # show current key or generate a free one
+  tf auth                                          # show current key or generate a free one
   tf upload dataset.parquet
   tf upload model.pt --expires=24h --json
   tf upload report.pdf --once --quiet
+  tf upload weights.pt --run-id=run-42 --step=train --intent=checkpoint
+  tf run run-42                                    # show all artifacts for run-42
   cat data.json | tf upload - --name=output.json
 
 \x1b[2mConfig: ${CONFIG_FILE}\x1b[0m
@@ -625,6 +684,12 @@ switch (cmd) {
     const file = positional[0];
     if (!file) { console.error('  usage: transfa upload <file>'); process.exit(1); }
     upload(file, opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
+    break;
+  }
+  case 'run': {
+    const runId = positional[0];
+    if (!runId) { console.error('  usage: tf run <run-id>'); process.exit(1); }
+    run(runId, opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
     break;
   }
   case 'auth': {

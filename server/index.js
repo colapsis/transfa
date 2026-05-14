@@ -56,6 +56,7 @@ app.use(express.json({ limit: '1mb' }));
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/upload', require('./routes/upload'));
+app.use('/api/run', require('./routes/upload'));   // /api/run/:run_id shares the upload router
 app.use('/api/download', require('./routes/download'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/billing', require('./routes/billing').router);
