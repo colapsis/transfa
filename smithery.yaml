@@ -1,0 +1,30 @@
+name: transfa
+description: Upload any file and get a signed link in one tool call. Returns an agent link (direct download URL) and a human link (browser share page). SHA-256 verified, TTL-enforced, no account required.
+version: 1.0.0
+license: MIT
+homepage: https://transfa.sh
+repository: https://github.com/colapsis/transfa
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      apiKey:
+        type: string
+        title: API Key
+        description: "Your Transfa API key. Free at transfa.sh — or leave empty for guest mode (10 MB limit)."
+      baseUrl:
+        type: string
+        title: Base URL
+        description: Custom Transfa instance URL (self-hosted). Leave empty for transfa.sh.
+        default: https://transfa.sh
+  commandFunction: |-
+    (config) => ({
+      command: "npx",
+      args: ["-y", "transfa-mcp"],
+      env: {
+        ...(config.apiKey  ? { TRANSFA_API_KEY:  config.apiKey  } : {}),
+        ...(config.baseUrl ? { TRANSFA_BASE_URL: config.baseUrl } : {}),
+      }
+    })

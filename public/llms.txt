@@ -1,0 +1,98 @@
+# transfa
+
+File sharing for AI agents and developers. Upload any file, get a signed URL. No account required.
+
+## What it does
+
+- Upload a file → get an agent link (direct download) + human link (browser share page)
+- SHA-256 returned on every upload, verified on `tf download`
+- Configurable TTL (1h to 30d), optional password gate, optional download limit
+- Pipeline manifests: tag uploads with run_id, step, consumer, intent
+- Grace period: file stays downloadable N hours after TTL for delayed pipeline steps
+
+## MCP server (for AI assistants)
+
+Install: add to claude_desktop_config.json or any MCP host
+
+```json
+{
+  "mcpServers": {
+    "transfa": {
+      "command": "npx",
+      "args": ["-y", "transfa-mcp"],
+      "env": { "TRANSFA_API_KEY": "your-key" }
+    }
+  }
+}
+```
+
+Tools: upload, file_info, list_uploads, delete_upload
+
+## CLI
+
+```
+npm install -g transfa
+tf upload ./report.pdf                      # returns signed URL, no account needed
+tf upload ./model.pt --expires=24h --grace=12h
+tf download a7f9k2                          # streams + verifies SHA-256 by default
+tf watch a7f9k2                             # tail download events
+tf run run-42                               # list all artifacts in a pipeline run
+```
+
+## REST API
+
+Base URL: https://transfa.sh
+Auth: Bearer token via Authorization header or X-Api-Key header
+OpenAPI spec: https://transfa.sh/openapi.yaml
+
+### Upload a file
+POST /api/upload (multipart/form-data)
+Fields: file (required), ttl, filename, max_downloads, password, grace, run_id, step, consumer, intent
+Response: { id, download_url, url, filename, bytes, sha256, expires_at }
+
+### Download a file
+GET /api/download/:id
+Headers: X-Transfa-SHA256 (hash), X-Transfa-Expires (ISO timestamp)
+Query: password (if protected)
+
+### File metadata
+GET /api/download/info/:id
+Response: { id, filename, bytes, sha256, expires_at, download_count, has_password, expired, in_grace, active }
+
+### List uploads (auth required)
+GET /api/upload?limit=20&offset=0
+
+### Delete upload (auth required)
+DELETE /api/upload/:id
+
+### Extend TTL (auth required)
+PATCH /api/upload/:id/extend
+Body: { ttl: "7d" }
+
+### Pipeline manifest
+GET /api/run/:run_id
+Response: { run_id, total, artifacts[] }
+
+## GitHub Actions
+
+```yaml
+- uses: colapsis/transfa-action@v1
+  id: upload
+  with:
+    file: ./dist/report.pdf
+    api-key: ${{ secrets.TRANSFA_API_KEY }}
+# outputs: agent-link, human-link, sha256, expires-at, id
+```
+
+## Security model
+
+Links provide: content integrity (SHA-256), optional password gate, hard TTL.
+Links do NOT provide: identity verification on the downloader (anyone with the URL can fetch).
+Good for: internal pipelines, ephemeral artifacts, dev/staging handoffs.
+Not for: regulated data requiring audited identity-based access control.
+
+## Pricing
+
+- Free: 500 MB/upload, 7d TTL, 20 uploads/day, no account required for guest uploads
+- Pro ($12/mo): 50 GB/upload, 30d TTL, unlimited uploads, API + MCP
+- Team ($48/mo): 100 GB/upload, custom TTL, 5 seats, audit log, SAML SSO
