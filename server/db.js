@@ -90,6 +90,10 @@ try { db.exec('ALTER TABLE uploads ADD COLUMN grace_seconds INTEGER NOT NULL DEF
 try { db.exec('ALTER TABLE uploads ADD COLUMN source TEXT'); } catch { /* already exists */ }
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_uploads_run ON uploads(run_id)'); } catch { /* already exists */ }
 
+// Provenance: artifact flag and upstream lineage
+try { db.exec('ALTER TABLE uploads ADD COLUMN artifact INTEGER NOT NULL DEFAULT 0'); } catch { /* already exists */ }
+try { db.exec('ALTER TABLE uploads ADD COLUMN upstream_ids TEXT'); } catch { /* already exists */ }
+
 // Webhook endpoints table
 db.exec(`
   CREATE TABLE IF NOT EXISTS webhook_endpoints (

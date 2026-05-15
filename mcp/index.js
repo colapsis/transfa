@@ -46,7 +46,7 @@ function httpRequest(urlStr, options = {}, body = null) {
   });
 }
 
-function uploadFile({ filePath, apiKey, expires, name, password, once, maxDownloads, grace, runId, step, consumer, intent }) {
+function uploadFile({ filePath, apiKey, expires, name, password, once, maxDownloads, grace, runId, step, consumer, intent, artifact, upstreamIds }) {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(filePath)) return reject(new Error(`file not found: ${filePath}`));
 
@@ -65,6 +65,8 @@ function uploadFile({ filePath, apiKey, expires, name, password, once, maxDownlo
     if (step)         textFields.push(['step', step]);
     if (consumer)     textFields.push(['consumer', consumer]);
     if (intent)       textFields.push(['intent', intent]);
+    if (artifact)     textFields.push(['artifact', 'true']);
+    if (upstreamIds?.length) textFields.push(['upstream_ids', JSON.stringify(upstreamIds)]);
 
     // Build multipart body: file part first, then text fields
     const fileHeader = Buffer.from(
@@ -128,6 +130,8 @@ const TOOLS = [
         step:          { type: 'string',  description: 'Step name within the run, e.g. "preprocess", "train", "evaluate"' },
         consumer:      { type: 'string',  description: 'Who or what will consume this file, e.g. an agent name or service' },
         intent:        { type: 'string',  description: 'Why this file exists, e.g. "checkpoint", "report", "dataset-slice"' },
+        artifact:      { type: 'boolean', description: 'Mark as immutable artifact — blocks deletion without explicit force. Use for final outputs that must not be removed.' },
+        upstream_ids:  { type: 'array', items: { type: 'string' }, description: 'Transfa IDs of files that were consumed to produce this one — records the data lineage' },
       },
       required: ['path'],
     },
@@ -203,6 +207,8 @@ async function handleTool(name, args) {
         step:         args.step,
         consumer:     args.consumer,
         intent:       args.intent,
+        artifact:     args.artifact,
+        upstreamIds:  args.upstream_ids,
       });
       return {
         content: [{
@@ -219,6 +225,8 @@ async function handleTool(name, args) {
             ...(data.step          && { step:          data.step }),
             ...(data.consumer      && { consumer:      data.consumer }),
             ...(data.intent        && { intent:        data.intent }),
+            ...(data.artifact      && { artifact:      true }),
+            ...(data.upstream_ids?.length && { upstream_ids: data.upstream_ids }),
             ...(data.grace_seconds && { grace_seconds: data.grace_seconds }),
           }, null, 2),
         }],

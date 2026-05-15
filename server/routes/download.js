@@ -104,7 +104,8 @@ router.get('/info/:id', (req, res) => {
     `SELECT u.id, u.original_filename, u.size, u.sha256, u.mime_type,
             u.download_count, u.max_downloads, u.expires_at, u.created_at,
             u.uploader_name, u.deleted_at, u.password_hash,
-            u.run_id, u.step, u.consumer, u.intent, u.grace_seconds
+            u.run_id, u.step, u.consumer, u.intent, u.grace_seconds,
+            u.artifact, u.upstream_ids
      FROM uploads u WHERE u.id = ?`
   ).get(req.params.id);
 
@@ -138,10 +139,12 @@ router.get('/info/:id', (req, res) => {
     active: !expired && !upload.deleted_at,
     last_download_at: lastDl ? new Date(lastDl.downloaded_at * 1000).toISOString() : null,
     ...(infoGrace > 0  && { grace_seconds: infoGrace, grace_expires_at: new Date(infoEffectiveExpiry * 1000).toISOString() }),
-    ...(upload.run_id    && { run_id:   upload.run_id }),
-    ...(upload.step      && { step:     upload.step }),
-    ...(upload.consumer  && { consumer: upload.consumer }),
-    ...(upload.intent    && { intent:   upload.intent }),
+    ...(upload.run_id      && { run_id:       upload.run_id }),
+    ...(upload.step        && { step:         upload.step }),
+    ...(upload.consumer    && { consumer:     upload.consumer }),
+    ...(upload.intent      && { intent:       upload.intent }),
+    ...(upload.artifact    && { artifact:     true }),
+    ...(upload.upstream_ids && { upstream_ids: JSON.parse(upload.upstream_ids) }),
   });
 });
 

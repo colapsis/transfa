@@ -117,6 +117,8 @@ async function upload(filePath, opts) {
   if (opts.step)     form.append('step',     opts.step);
   if (opts.consumer) form.append('consumer', opts.consumer);
   if (opts.intent)   form.append('intent',   opts.intent);
+  if (opts.artifact) form.append('artifact', 'true');
+  if (opts.upstream) form.append('upstream_ids', opts.upstream);
 
   const headers = { ...form.getHeaders() };
   if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
@@ -178,10 +180,12 @@ async function upload(filePath, opts) {
     console.log(`  uploading  ${formatBytes(size)}  ${progressBar(1)}  100%   18.2 MB/s`);
     if (data.sha256) console.log(`  signed     sha256:${data.sha256.slice(0, 4)}...${data.sha256.slice(-4)}`);
     console.log(`  expires    ${data.expires_at}`);
-    if (data.run_id)   console.log(`  run        ${data.run_id}`);
-    if (data.step)     console.log(`  step       ${data.step}`);
-    if (data.consumer) console.log(`  consumer   ${data.consumer}`);
-    if (data.intent)   console.log(`  intent     ${data.intent}`);
+    if (data.run_id)       console.log(`  run        ${data.run_id}`);
+    if (data.step)         console.log(`  step       ${data.step}`);
+    if (data.consumer)     console.log(`  consumer   ${data.consumer}`);
+    if (data.intent)       console.log(`  intent     ${data.intent}`);
+    if (data.artifact)     console.log(`  artifact   yes (immutable)`);
+    if (data.upstream_ids?.length) console.log(`  upstream   ${data.upstream_ids.join(', ')}`);
     if (data.api_key) {
       console.log(`\n  api key auto-generated (save this):`);
       console.log(`  ${data.api_key}`);
@@ -851,6 +855,8 @@ function help() {
   --step=<str>          pipeline step name (e.g. preprocess, train)
   --consumer=<str>      who/what will consume this artifact
   --intent=<str>        why this file exists (e.g. checkpoint, report)
+  --artifact            mark as immutable artifact (blocks deletion without --force)
+  --upstream=<ids>      comma-separated IDs of files that produced this one
   --json                output machine-parseable JSON
   --quiet               print URLs and nothing else
 
