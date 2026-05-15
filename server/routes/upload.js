@@ -241,6 +241,9 @@ router.post('/', upload.single('file'), async (req, res) => {
     });
   }
 
+  // Acquisition source (web widget only — sanitise to 64 chars max)
+  const source = req.body.source ? String(req.body.source).slice(0, 64) : null;
+
   // Manifest fields — form fields take priority, headers as fallback
   const runId    = req.body.run_id    || req.headers['x-transfa-run-id']   || null;
   const step     = req.body.step      || req.headers['x-transfa-step']     || null;
@@ -303,8 +306,8 @@ router.post('/', upload.single('file'), async (req, res) => {
   const mimeType = detectMime(originalFilename);
 
   db.prepare(
-    `INSERT INTO uploads (id, api_key_id, filename, original_filename, size, sha256, mime_type, storage_path, expires_at, uploader_name, max_downloads, password_hash, run_id, step, consumer, intent, grace_seconds)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO uploads (id, api_key_id, filename, original_filename, size, sha256, mime_type, storage_path, expires_at, uploader_name, max_downloads, password_hash, run_id, step, consumer, intent, grace_seconds, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     uploadId, keyRow.id, req.file.filename, originalFilename,
     req.file.size, sha256, mimeType,
@@ -312,7 +315,7 @@ router.post('/', upload.single('file'), async (req, res) => {
     keyRow.username || null,
     req.body.max_downloads ? parseInt(req.body.max_downloads) : null,
     passwordHash,
-    runId, step, consumer, intent, graceSeconds
+    runId, step, consumer, intent, graceSeconds, source
   );
 
   db.prepare('UPDATE api_keys SET uploads_today = uploads_today + 1, last_used_at = ? WHERE id = ?').run(now, keyRow.id);

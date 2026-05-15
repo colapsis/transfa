@@ -319,7 +319,7 @@ export default function Admin() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 680 }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      {['Type', 'When', 'File', 'Size', 'Uploader', 'IP'].map(h => (
+                      {['Type', 'When', 'File', 'Size', 'Uploader', 'Source', 'IP'].map(h => (
                         <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 500, color: 'var(--text-3)', fontSize: 11, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{h}</th>
                       ))}
                     </tr>
@@ -341,6 +341,11 @@ export default function Admin() {
                           </td>
                           <td style={{ padding: '8px 16px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{fmt(e.size)}</td>
                           <td style={{ padding: '8px 16px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-2)' }}>{e.uploader_name || <span style={{ color: 'var(--text-3)' }}>guest</span>}</td>
+                          <td style={{ padding: '8px 16px', fontFamily: 'var(--mono)', fontSize: 11 }}>
+                            {e.source ? (
+                              <span style={{ color: 'var(--accent)', background: 'var(--accent-soft)', padding: '2px 7px', borderRadius: 4 }}>{e.source}</span>
+                            ) : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                          </td>
                           <td style={{ padding: '8px 16px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-3)' }}>
                             {e.ip ? (
                               <span title={e.user_agent || ''}>{e.ip}</span>
@@ -349,7 +354,7 @@ export default function Admin() {
                         </tr>
                       );
                     }) : (
-                      <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--mono)', fontSize: 13 }}>loading…</td></tr>
+                      <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--mono)', fontSize: 13 }}>loading…</td></tr>
                     )}
                   </tbody>
                 </table>

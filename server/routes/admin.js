@@ -156,7 +156,8 @@ router.get('/audit', requireAdmin, (req, res) => {
            u.size,
            u.uploader_name,
            NULL AS ip,
-           NULL AS user_agent
+           NULL AS user_agent,
+           u.source
     FROM uploads u
 
     UNION ALL
@@ -168,7 +169,8 @@ router.get('/audit', requireAdmin, (req, res) => {
            u.size,
            u.uploader_name,
            dl.ip,
-           dl.user_agent
+           dl.user_agent,
+           u.source
     FROM download_log dl
     JOIN uploads u ON u.id = dl.upload_id
 
@@ -181,7 +183,8 @@ router.get('/audit', requireAdmin, (req, res) => {
            u.size,
            u.uploader_name,
            NULL,
-           NULL
+           NULL,
+           u.source
     FROM uploads u
     WHERE u.deleted_at IS NOT NULL
 

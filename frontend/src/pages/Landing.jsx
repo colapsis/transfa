@@ -168,6 +168,26 @@ function MiniStat({ label, value }) {
   );
 }
 
+function detectSource() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('utm_source')) return params.get('utm_source');
+    if (document.referrer) {
+      const host = new URL(document.referrer).hostname.replace(/^www\./, '');
+      if (host.includes('smithery.ai'))            return 'smithery';
+      if (host.includes('reddit.com'))             return 'reddit';
+      if (host.includes('news.ycombinator.com'))   return 'hackernews';
+      if (host.includes('github.com'))             return 'github';
+      if (host.includes('twitter.com') || host.includes('x.com')) return 'twitter';
+      if (host.includes('linkedin.com'))           return 'linkedin';
+      if (host.includes('producthunt.com'))        return 'producthunt';
+      if (host.includes('google.'))               return 'google';
+      return host;
+    }
+  } catch {}
+  return 'direct';
+}
+
 function fmtSize(b) {
   if (b < 1024) return b + ' B';
   if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
@@ -198,6 +218,7 @@ function HeroUpload() {
 
     const fd = new FormData();
     fd.append('file', file);
+    fd.append('source', detectSource());
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/upload');
     xhr.upload.onprogress = e => {
