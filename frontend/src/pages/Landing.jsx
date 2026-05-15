@@ -419,8 +419,8 @@ function HowItWorks() {
     {
       n: '01',
       title: 'Install once.',
-      body: 'One npm install. No runtime, no dependencies. Drop into your agent\'s tool list and forget it.',
-      code: <><Sh><span className="tok-cmd">npm</span> install <span className="tok-flag">-g</span> transfa</Sh></>,
+      body: 'Node.js CLI, Python SDK, or MCP server — pick your stack. Drop into your agent\'s tool list and forget it.',
+      code: <><Sh><span className="tok-cmd">npm</span> install <span className="tok-flag">-g</span> transfa</Sh>{'\n'}<Sh><span className="tok-cmd">pip</span> install transfa</Sh>{'\n'}<Sh><span className="tok-cmd">npx</span> <span className="tok-flag">-y</span> transfa-mcp</Sh></>,
     },
     {
       n: '02',

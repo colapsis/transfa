@@ -40,18 +40,22 @@ Most file-sharing tools are built for humans clicking through UIs. **transfa is 
 
 ## Install
 
+**Node.js / CLI**
 ```bash
 npm install -g transfa
 ```
 
-Or run without installing:
-
+**Python SDK**
 ```bash
-npx transfa upload report.pdf
+pip install transfa
+```
+
+**MCP server** (Claude, Cursor, any MCP-compatible agent)
+```bash
+npx -y transfa-mcp
 ```
 
 Or use the raw install script:
-
 ```bash
 curl -fsSL https://transfa.sh/install | sh
 ```
@@ -260,6 +264,30 @@ When Claude has transfa as an MCP tool, it can:
 1. Generate a report → call `upload` → get a link → paste the link in the conversation
 2. Pass a file to another agent by sharing the `agent_link`
 3. Clean up with `delete_upload` when done
+
+---
+
+## Python SDK
+
+```python
+import transfa
+
+# Upload
+result = transfa.upload("model.pt", ttl="24h", run_id="run-42", artifact=True)
+print(result.url, result.sha256)
+
+# Download (SHA-256 verified)
+transfa.download(result.id, output="model.pt")
+
+# Provenance manifest for a run
+manifest = transfa.run_artifacts("run-42")
+
+# Async
+async with transfa.AsyncClient() as client:
+    result = await client.upload("model.pt")
+```
+
+See [python/README.md](python/README.md) for the full API reference.
 
 ---
 

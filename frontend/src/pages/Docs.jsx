@@ -181,10 +181,26 @@ export default function Docs() {
             <CodeWindow title="package managers" lang="bash">
               <span className="tok-c"># macOS / Linuxbrew</span>{'\n'}
               <Sh><span className="tok-cmd">brew</span> install transfa</Sh>{'\n\n'}
-              <span className="tok-c"># npm (global CLI)</span>{'\n'}
+              <span className="tok-c"># npm (Node.js CLI)</span>{'\n'}
               <Sh><span className="tok-cmd">npm</span> install <span className="tok-flag">-g</span> transfa</Sh>{'\n\n'}
+              <span className="tok-c"># pip (Python SDK)</span>{'\n'}
+              <Sh><span className="tok-cmd">pip</span> install transfa</Sh>{'\n\n'}
+              <span className="tok-c"># MCP server (Claude, Cursor, any MCP agent)</span>{'\n'}
+              <Sh><span className="tok-cmd">npx</span> <span className="tok-flag">-y</span> transfa-mcp</Sh>{'\n\n'}
               <span className="tok-c"># Docker</span>{'\n'}
               <Sh><span className="tok-cmd">docker</span> run <span className="tok-flag">--rm</span> <span className="tok-flag">-v</span> $PWD:/data ghcr.io/transfa/cli</Sh>
+            </CodeWindow>
+
+            <H3 id="python-sdk">Python SDK</H3>
+            <P>Full sync and async client with typed return values. Reads <Mono>TRANSFA_API_KEY</Mono> or <Mono>~/.transfa/config.json</Mono> automatically.</P>
+            <CodeWindow title="python" lang="python">
+              <span className="tok-kw">import</span> transfa{'\n\n'}
+              <span className="tok-c"># sync</span>{'\n'}
+              result = transfa.upload(<span className="tok-str">"model.pt"</span>, ttl=<span className="tok-str">"24h"</span>, artifact=<span className="tok-kw">True</span>){'\n'}
+              <span className="tok-bi">print</span>(result.url, result.sha256){'\n\n'}
+              <span className="tok-c"># async</span>{'\n'}
+              <span className="tok-kw">async with</span> transfa.AsyncClient() <span className="tok-kw">as</span> client:{'\n'}
+              {'    '}<span className="tok-kw">await</span> client.upload(<span className="tok-str">"model.pt"</span>)
             </CodeWindow>
 
             <H2 id="quickstart" eyebrow="02 · quickstart">Quick start</H2>
