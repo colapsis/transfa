@@ -1,4 +1,4 @@
-name: transfa
+name: transfa/transfa
 description: Upload any file and get a signed link in one tool call. Returns an agent link (direct download URL) and a human link (browser share page). SHA-256 verified, TTL-enforced, no account required.
 version: 1.0.0
 license: MIT
