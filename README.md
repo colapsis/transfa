@@ -248,10 +248,11 @@ The API key is optional — the server works in guest mode without one (10 MB / 
 
 | Tool | Description |
 |---|---|
-| `upload` | Upload a file from the local filesystem. Returns `agent_link` (direct URL), `human_link` (share page), and `sha256` for integrity. |
-| `file_info` | Get metadata about an upload — filename, size, SHA-256, expiry, download count, active status. |
+| `upload` | Upload a file from the local filesystem. Returns `agent_link` (direct URL), `human_link` (share page), and `sha256`. Accepts `run_id`, `step`, `consumer`, `intent` for provenance. |
+| `file_info` | Get metadata about an upload — filename, size, SHA-256, expiry, download count, provenance fields. |
 | `list_uploads` | List recent uploads (requires API key). |
 | `delete_upload` | Delete an upload immediately. |
+| `run_artifacts` | Get all files uploaded under a `run_id` — the full provenance manifest for a pipeline run or agent session. |
 
 ### Example agent workflow
 

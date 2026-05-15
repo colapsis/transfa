@@ -77,6 +77,14 @@ Delete an upload immediately.
 { "id": "xK9mRp" }
 ```
 
+### `run_artifacts`
+
+List all files uploaded under a `run_id` — the provenance manifest for a pipeline run or agent session. Returns every artifact with its id, filename, sha256, step, consumer, intent, and expiry.
+
+```json
+{ "run_id": "run-42" }
+```
+
 ## Environment variables
 
 | Variable | Description |

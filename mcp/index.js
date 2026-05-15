@@ -46,7 +46,7 @@ function httpRequest(urlStr, options = {}, body = null) {
   });
 }
 
-function uploadFile({ filePath, apiKey, expires, name, password, once, maxDownloads, grace }) {
+function uploadFile({ filePath, apiKey, expires, name, password, once, maxDownloads, grace, runId, step, consumer, intent }) {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(filePath)) return reject(new Error(`file not found: ${filePath}`));
 
@@ -61,6 +61,10 @@ function uploadFile({ filePath, apiKey, expires, name, password, once, maxDownlo
     if (grace)        textFields.push(['grace', grace]);
     if (once)         textFields.push(['max_downloads', '1']);
     else if (maxDownloads) textFields.push(['max_downloads', String(maxDownloads)]);
+    if (runId)        textFields.push(['run_id', runId]);
+    if (step)         textFields.push(['step', step]);
+    if (consumer)     textFields.push(['consumer', consumer]);
+    if (intent)       textFields.push(['intent', intent]);
 
     // Build multipart body: file part first, then text fields
     const fileHeader = Buffer.from(
@@ -105,9 +109,10 @@ const TOOLS = [
   {
     name: 'upload',
     description:
-      'Upload a file from the local filesystem and get a signed link. ' +
-      'Returns an agent_link (direct download URL for scripts/agents) and a human_link ' +
-      '(browser-friendly share page). SHA-256 is always computed and returned for integrity checks. ' +
+      'Upload a file from the local filesystem and get a shareable, expiring link. ' +
+      'Returns agent_link (direct download URL), human_link (browser share page), and sha256 for integrity. ' +
+      'Supports provenance fields (run_id, step, consumer, intent) for multi-agent handoff — ' +
+      'these travel with the file and are returned by file_info, so the receiving agent knows who produced it and why. ' +
       'Works without an API key (guest mode, 10 MB limit). Set TRANSFA_API_KEY for larger files and longer TTLs.',
     inputSchema: {
       type: 'object',
@@ -119,6 +124,10 @@ const TOOLS = [
         once:          { type: 'boolean', description: 'Delete after first download' },
         max_downloads: { type: 'number',  description: 'Max download count' },
         grace:         { type: 'string',  description: 'Grace period after expiry, e.g. "12h" — keeps file downloadable this long after TTL ends' },
+        run_id:        { type: 'string',  description: 'Pipeline or agent session ID — groups related artifacts together (retrieve all with run_artifacts)' },
+        step:          { type: 'string',  description: 'Step name within the run, e.g. "preprocess", "train", "evaluate"' },
+        consumer:      { type: 'string',  description: 'Who or what will consume this file, e.g. an agent name or service' },
+        intent:        { type: 'string',  description: 'Why this file exists, e.g. "checkpoint", "report", "dataset-slice"' },
       },
       required: ['path'],
     },
@@ -158,6 +167,19 @@ const TOOLS = [
       required: ['id'],
     },
   },
+  {
+    name: 'run_artifacts',
+    description:
+      'List all files uploaded under a run_id — the provenance manifest for a pipeline run or agent session. ' +
+      'Returns every artifact with its id, filename, sha256, step, consumer, intent, and expiry.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'The run_id used when uploading the artifacts' },
+      },
+      required: ['run_id'],
+    },
+  },
 ];
 
 // ─── Tool handlers ────────────────────────────────────────────────────────────
@@ -177,6 +199,10 @@ async function handleTool(name, args) {
         once:         args.once,
         maxDownloads: args.max_downloads,
         grace:        args.grace,
+        runId:        args.run_id,
+        step:         args.step,
+        consumer:     args.consumer,
+        intent:       args.intent,
       });
       return {
         content: [{
@@ -189,6 +215,10 @@ async function handleTool(name, args) {
             bytes:       data.bytes,
             sha256:      data.sha256,
             expires_at:  data.expires_at,
+            ...(data.run_id        && { run_id:        data.run_id }),
+            ...(data.step          && { step:          data.step }),
+            ...(data.consumer      && { consumer:      data.consumer }),
+            ...(data.intent        && { intent:        data.intent }),
             ...(data.grace_seconds && { grace_seconds: data.grace_seconds }),
           }, null, 2),
         }],
@@ -234,6 +264,17 @@ async function handleTool(name, args) {
       });
       if (res.status !== 200) return { content: [{ type: 'text', text: `Error: ${res.body?.error || res.status}` }], isError: true };
       return { content: [{ type: 'text', text: `Deleted ${args.id}` }] };
+    } catch (e) {
+      return { content: [{ type: 'text', text: `Error: ${e.message}` }], isError: true };
+    }
+  }
+
+  if (name === 'run_artifacts') {
+    try {
+      const res = await httpRequest(`${BASE_URL}/api/run/${encodeURIComponent(args.run_id)}`);
+      if (res.status === 404) return { content: [{ type: 'text', text: `No artifacts found for run_id: ${args.run_id}` }], isError: true };
+      if (res.status !== 200) return { content: [{ type: 'text', text: `Error: ${res.body?.error || res.status}` }], isError: true };
+      return { content: [{ type: 'text', text: JSON.stringify(res.body, null, 2) }] };
     } catch (e) {
       return { content: [{ type: 'text', text: `Error: ${e.message}` }], isError: true };
     }
