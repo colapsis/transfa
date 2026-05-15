@@ -38,8 +38,8 @@ export default function Contact() {
                 <p className="muted" style={{ fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' }}>
                   Questions about plans, CLI issues, API behavior, or just want to say hi — we read everything and reply fast.
                 </p>
-                <a href="mailto:tansfa.sh@gmail.com" className="btn btn-primary" style={{ display: 'inline-flex' }}>
-                  tansfa.sh@gmail.com
+                <a href="mailto:baygot.artem@gmail.com" className="btn btn-primary" style={{ display: 'inline-flex' }}>
+                  baygot.artem@gmail.com
                 </a>
               </div>
             </div>
@@ -57,8 +57,8 @@ export default function Contact() {
                 <p className="muted" style={{ fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' }}>
                   More than 50 users, compliance requirements, or need a dedicated region? Reach out and we'll set something up.
                 </p>
-                <a href="mailto:tansfa.sh@gmail.com" className="btn btn-secondary" style={{ display: 'inline-flex' }}>
-                  tansfa.sh@gmail.com
+                <a href="mailto:baygot.artem@gmail.com" className="btn btn-secondary" style={{ display: 'inline-flex' }}>
+                  baygot.artem@gmail.com
                 </a>
               </div>
             </div>
