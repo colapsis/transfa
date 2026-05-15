@@ -650,6 +650,12 @@ paths:
                   type: string
                   description: Intended use of this file
                   example: artifact
+                grace:
+                  type: string
+                  description: >
+                    Extra time the file stays downloadable after TTL expires (e.g. "2h").
+                    Useful in CI pipelines where a downstream step may start just as the TTL ends.
+                  example: 2h
       responses:
         "200":
           description: File uploaded successfully
@@ -1412,6 +1418,43 @@ paths:
                 $ref: "#/components/schemas/Error"
         "422":
           description: No Stripe customer found for this account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Badge ───────────────────────────────────────────────────────────────────
+
+  /badge/{id}:
+    get:
+      tags: [Badge]
+      summary: Download count badge (SVG)
+      description: |
+        Returns a flat SVG badge showing the current download count for a file.
+        Embed in any README: `![downloads](https://transfa.sh/badge/FILE_ID)`
+      operationId: getDownloadBadge
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: g7Hk2pQr
+      responses:
+        "200":
+          description: SVG badge
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Short cache TTL so badge stays fresh
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+        "404":
+          description: File not found
           content:
             application/json:
               schema:

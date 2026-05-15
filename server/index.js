@@ -64,6 +64,39 @@ app.use('/api/u', require('./routes/profile'));
 app.use('/api/billing', require('./routes/billing').router);
 app.use('/api/admin', require('./routes/admin'));
 
+// Badge endpoint — /badge/:id returns SVG download count badge for README embedding
+app.get('/badge/:id', (req, res) => {
+  const upload = db.prepare('SELECT download_count FROM uploads WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
+  if (!upload) return res.status(404).json({ error: 'not found' });
+
+  const count = upload.download_count ?? 0;
+  const label = 'downloads';
+  const value = String(count);
+  const labelW = label.length * 6.5 + 10;
+  const valueW = value.length * 7 + 10;
+  const totalW = Math.round(labelW + valueW);
+  const lx = Math.round(labelW / 2);
+  const vx = Math.round(labelW + valueW / 2);
+
+  res.set('Content-Type', 'image/svg+xml');
+  res.set('Cache-Control', 'no-cache, max-age=0');
+  res.send(`<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="20">
+  <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
+  <clipPath id="r"><rect width="${totalW}" height="20" rx="3" fill="#fff"/></clipPath>
+  <g clip-path="url(#r)">
+    <rect width="${Math.round(labelW)}" height="20" fill="#555"/>
+    <rect x="${Math.round(labelW)}" width="${Math.round(valueW)}" height="20" fill="#4c9aff"/>
+    <rect width="${totalW}" height="20" fill="url(#s)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11">
+    <text x="${lx}" y="15" fill="#010101" fill-opacity=".3">${label}</text>
+    <text x="${lx}" y="14">${label}</text>
+    <text x="${vx}" y="15" fill="#010101" fill-opacity=".3">${value}</text>
+    <text x="${vx}" y="14">${value}</text>
+  </g>
+</svg>`);
+});
+
 // Static well-known files
 app.use('/openapi.yaml', express.static(path.join(__dirname, '../public/openapi.yaml')));
 app.use('/llms.txt', express.static(path.join(__dirname, '../public/llms.txt')));
