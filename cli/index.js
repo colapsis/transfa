@@ -626,6 +626,41 @@ async function watch(id, opts) {
   });
 }
 
+// ─── Extend command ───
+async function extend(id, duration, opts) {
+  const config = loadConfig();
+  const apiKey = config.api_key;
+  const apiBase = config.api_base || DEFAULT_API;
+
+  if (!apiKey) {
+    console.error('  error: not authenticated. run: tf auth');
+    process.exit(1);
+  }
+  if (!duration) {
+    console.error('  usage: tf extend <id> <duration>  e.g. tf extend abc123 24h');
+    process.exit(1);
+  }
+
+  const res = await request(`${apiBase}/api/upload/${id}/extend`, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+  }, JSON.stringify({ ttl: duration }));
+
+  if (res.status !== 200) {
+    console.error('  error:', res.body?.error || res.status);
+    process.exit(1);
+  }
+
+  if (opts.json) {
+    console.log(JSON.stringify(res.body));
+    return;
+  }
+
+  const newExpiry = res.body.expires_at;
+  console.log(`  \x1b[32m✓\x1b[0m extended  ${id}  +${duration}`);
+  if (newExpiry) console.log(`  expires   ${newExpiry}`);
+}
+
 // ─── Delete command ───
 async function rm(id) {
   const config = loadConfig();
@@ -795,6 +830,7 @@ function help() {
   tf watch <id>             tail download events for an upload in real time
   tf url <id>               print share + download URLs for an upload
   tf list                   list your uploads (--urls to show links)
+  tf extend <id> <dur>      extend an upload's expiry (e.g. tf extend abc123 24h)
   tf rm <id>                delete an upload
   tf auth [api-key]         show current key, or generate/set one
   tf whoami                 show current auth status and plan
@@ -920,6 +956,13 @@ switch (cmd) {
     const id = positional[0];
     if (!id) { console.error('  usage: tf url <id>'); process.exit(1); }
     getUrl(id, opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
+    break;
+  }
+  case 'extend':
+  case 'bump': {
+    const id = positional[0];
+    const dur = positional[1];
+    extend(id, dur, opts).catch(e => { console.error('  error:', e.message); process.exit(1); });
     break;
   }
   case 'rm':

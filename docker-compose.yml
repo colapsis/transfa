@@ -1,0 +1,26 @@
+services:
+  transfa:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      - transfa_data:/data
+    environment:
+      PORT: 3001
+      BASE_URL: ${BASE_URL:-http://localhost:3001}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      # Optional — Stripe billing (leave blank to disable)
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_PRO_MONTHLY: ${STRIPE_PRICE_PRO_MONTHLY:-}
+      STRIPE_PRICE_PRO_YEARLY: ${STRIPE_PRICE_PRO_YEARLY:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/openapi.yaml"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  transfa_data:

@@ -1,6 +1,6 @@
 {
   "name": "transfa-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "MCP server for transfa — upload any file and get a signed link in one tool call",
   "main": "index.js",
   "bin": {
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node index.js"
   },
-  "keywords": ["mcp", "transfa", "file-sharing", "ai", "agents", "model-context-protocol"],
+  "keywords": ["mcp", "transfa", "file-sharing", "file-transfer", "ai", "agents", "model-context-protocol", "claude", "llm", "cicd", "ephemeral", "upload", "download", "signed-url", "ttl"],
   "author": "Transfa Labs",
   "mcpName": "io.github.colapsis/transfa",
   "license": "MIT",
