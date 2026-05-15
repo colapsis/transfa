@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://transfa.sh/brand/logo-wordmark.png" height="52" alt="transfa" />
+  <a href="https://transfa.sh"><img src="https://transfa.sh/brand/logo-wordmark.png" height="52" alt="transfa" /></a>
 </p>
 
 <p align="center">
