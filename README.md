@@ -216,9 +216,55 @@ Any other format is accepted as `application/octet-stream` — nothing is blocke
 
 ---
 
-## Use with AI agents
+## MCP server (Claude, Cursor, and any MCP-compatible agent)
 
-transfa is designed to be called from AI coding assistants and autonomous agents:
+transfa ships an [MCP server](https://modelcontextprotocol.io) that lets Claude, Cursor, and any MCP-compatible agent upload and share files autonomously — no shell commands, no infrastructure setup.
+
+```bash
+npx -y transfa-mcp
+```
+
+### Claude Desktop config
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "transfa": {
+      "command": "npx",
+      "args": ["-y", "transfa-mcp"],
+      "env": {
+        "TRANSFA_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+The API key is optional — the server works in guest mode without one (10 MB / 24h limit).
+
+### Available MCP tools
+
+| Tool | Description |
+|---|---|
+| `upload` | Upload a file from the local filesystem. Returns `agent_link` (direct URL), `human_link` (share page), and `sha256` for integrity. |
+| `file_info` | Get metadata about an upload — filename, size, SHA-256, expiry, download count, active status. |
+| `list_uploads` | List recent uploads (requires API key). |
+| `delete_upload` | Delete an upload immediately. |
+
+### Example agent workflow
+
+When Claude has transfa as an MCP tool, it can:
+1. Generate a report → call `upload` → get a link → paste the link in the conversation
+2. Pass a file to another agent by sharing the `agent_link`
+3. Clean up with `delete_upload` when done
+
+---
+
+## Use with AI agents (script/subprocess)
+
+transfa is also designed to be called from shell scripts, CI pipelines, and agents that prefer subprocess calls:
 
 ```python
 import subprocess, json
