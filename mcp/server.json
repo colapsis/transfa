@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.colapsis/transfa",
-  "description": "Upload any file and get a signed link. Returns an agent link (direct download URL) and a human link (browser share page). SHA-256 verified, TTL-enforced, no account required for guest uploads.",
+  "description": "Upload any file, get a signed link. SHA-256 verified, TTL-enforced, no account required.",
   "repository": {
     "url": "https://github.com/colapsis/transfa",
     "source": "github"
