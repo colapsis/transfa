@@ -1,3 +1,5 @@
+
+
 <p align="center">
   <a href="https://transfa.sh"><img src="https://transfa.sh/brand/logo-wordmark.png" height="52" alt="transfa" /></a>
 </p>
@@ -49,6 +51,7 @@ npm install -g transfa
 ```bash
 pip install transfa
 ```
+Python 3.8+ is required.
 
 **MCP server** (Claude, Cursor, any MCP-compatible agent)
 ```bash
